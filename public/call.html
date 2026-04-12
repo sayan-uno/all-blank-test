@@ -5,6 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CallDrop - Calling...</title>
   <link rel="stylesheet" href="/style.css" />
+  <style>
+    .verified-name-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .verified-name-row.hidden { display: none; }
+    .verified-display-name {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #e0e0e0;
+      margin: 0;
+    }
+    .blue-tick-icon {
+      font-size: 1.3rem;
+      color: #4da6ff;
+    }
+  </style>
 </head>
 <body>
   <div class="bg-shapes">
@@ -19,6 +39,10 @@
       <div class="call-avatar">
         <div class="avatar-circle" id="precall-avatar-circle">
           <span id="precall-avatar-letter"></span>
+        </div>
+        <div id="precall-verified-row" class="verified-name-row hidden">
+          <h2 class="verified-display-name" id="precall-verified-name"></h2>
+          <span class="blue-tick-icon">&#10004;&#65039;</span>
         </div>
         <h2 id="precall-owner-name">Loading...</h2>
         <p id="precall-link-name" class="call-sub"></p>

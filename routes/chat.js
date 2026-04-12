@@ -1,10 +1,10 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const ChatMessage = require('../models/ChatMessage');
 const CallLink = require('../models/CallLink');
+const { authenticateToken, requireAuthCode } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -23,18 +23,6 @@ const upload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max
 });
-
-function authenticateToken(req, res, next) {
-  const token = req.cookies.token;
-  if (!token) return res.status(401).json({ error: 'Not authenticated' });
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.userId;
-    next();
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-}
 
 // Upload a file for chat
 router.post('/:linkId/upload', upload.single('file'), async (req, res) => {
@@ -71,7 +59,7 @@ router.get('/:linkId/messages', async (req, res) => {
 });
 
 // Clear chat (owner only)
-router.delete('/:linkId/clear', authenticateToken, async (req, res) => {
+router.delete('/:linkId/clear', authenticateToken, requireAuthCode, async (req, res) => {
   try {
     const link = await CallLink.findOne({ linkId: req.params.linkId, owner: req.userId });
     if (!link) return res.status(404).json({ error: 'Link not found' });

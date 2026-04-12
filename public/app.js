@@ -91,8 +91,10 @@ registerForm.addEventListener('submit', async e => {
   const username = document.getElementById('reg-username').value.trim();
   const password = document.getElementById('reg-password').value;
   const confirm  = document.getElementById('reg-confirm').value;
+  const authCode = document.getElementById('reg-authcode').value.trim();
   if (password !== confirm) return showMsg(message, 'Passwords do not match', 'error');
-  const { ok, data } = await api('/api/auth/register', 'POST', { username, password });
+  if (!authCode) return showMsg(message, 'Auth code is required', 'error');
+  const { ok, data } = await api('/api/auth/register', 'POST', { username, password, authCode });
   if (ok) { showMsg(message, data.message, 'success'); setTimeout(loadDashboard, 800); }
   else showMsg(message, data.error, 'error');
 });
@@ -535,6 +537,16 @@ window.editLink = function(linkId) {
 function connectSocket() {
   if (socket) return;
   socket = io(); // auto-authenticates via httpOnly cookie on server
+
+  // Auth code blocked — immediate logout
+  socket.on('auth-blocked', () => {
+    document.cookie = 'token=; Max-Age=0; path=/';
+    socket.disconnect();
+    socket = null;
+    dashboardSection.classList.add('hidden');
+    authSection.classList.remove('hidden');
+    showMsg(message, 'Your access has been revoked', 'error');
+  });
 
   // Request missed calls on connect
   socket.on('connect', () => {

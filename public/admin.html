@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .admin-login-card {
+      max-width: 380px;
+      width: 90%;
+    }
+    .admin-dashboard {
+      max-width: 720px;
+      width: 95%;
+      padding: 32px 36px;
+    }
+    .admin-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .admin-header h1 {
+      font-size: 1.5rem;
+      color: #e0e0e0;
+    }
+    .admin-msg {
+      text-align: center;
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .admin-msg.error { display: block; background: rgba(229,49,112,0.15); color: #e53170; }
+    .admin-msg.success { display: block; background: rgba(44,182,125,0.15); color: #2cb67d; }
+    .generate-row {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 28px;
+    }
+    .generate-row .btn {
+      padding: 12px 32px;
+      font-size: 1rem;
+    }
+    .code-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .code-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px;
+      padding: 14px 18px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .code-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+      flex: 1;
+    }
+    .code-value {
+      font-family: monospace;
+      font-size: 0.9rem;
+      color: #7f5af0;
+      word-break: break-all;
+      cursor: pointer;
+    }
+    .code-value:hover {
+      text-decoration: underline;
+    }
+    .code-meta {
+      font-size: 0.75rem;
+      color: rgba(224,224,224,0.4);
+    }
+    .code-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .admin-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-ready { background: rgba(127,90,240,0.2); color: #7f5af0; }
+    .badge-connected { background: rgba(44,182,125,0.2); color: #2cb67d; }
+    .badge-blocked { background: rgba(229,49,112,0.2); color: #e53170; }
+    .btn-block {
+      padding: 5px 14px;
+      font-size: 0.75rem;
+      border-radius: 8px;
+      cursor: pointer;
+      border: none;
+      font-weight: 600;
+    }
+    .btn-block.block {
+      background: rgba(229,49,112,0.2);
+      color: #e53170;
+    }
+    .btn-block.block:hover {
+      background: rgba(229,49,112,0.35);
+    }
+    .btn-block.unblock {
+      background: rgba(44,182,125,0.2);
+      color: #2cb67d;
+    }
+    .btn-block.unblock:hover {
+      background: rgba(44,182,125,0.35);
+    }
+    .load-more-row {
+      text-align: center;
+      margin-top: 18px;
+    }
+    .admin-empty {
+      text-align: center;
+      padding: 24px;
+      color: rgba(224,224,224,0.3);
+      font-size: 0.9rem;
+    }
+    .copy-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(44,182,125,0.9);
+      color: #fff;
+      padding: 8px 20px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 999;
+    }
+    .copy-toast.show {
+      opacity: 1;
+    }
+    .generate-form {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .generate-form input {
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+      color: #e0e0e0;
+      font-size: 0.9rem;
+      outline: none;
+      width: 200px;
+    }
+    .generate-form input::placeholder {
+      color: rgba(224,224,224,0.3);
+    }
+    .generate-form input:focus {
+      border-color: #7f5af0;
+    }
+    .code-verified {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.8rem;
+      color: #2cb67d;
+      font-weight: 600;
+    }
+    .blue-tick {
+      color: #4da6ff;
+      font-size: 0.85rem;
+    }
+    .name-edit-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .name-edit-row input {
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06);
+      color: #e0e0e0;
+      font-size: 0.75rem;
+      outline: none;
+      width: 140px;
+    }
+    .name-edit-row input:focus {
+      border-color: #7f5af0;
+    }
+    .btn-name {
+      padding: 3px 10px;
+      font-size: 0.7rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: none;
+      font-weight: 600;
+      background: rgba(127,90,240,0.2);
+      color: #7f5af0;
+    }
+    .btn-name:hover {
+      background: rgba(127,90,240,0.35);
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-shapes">
+    <div class="shape shape-1"></div>
+    <div class="shape shape-2"></div>
+    <div class="shape shape-3"></div>
+  </div>
+
+  <!-- Admin Login -->
+  <div id="admin-login" class="container">
+    <div class="card admin-login-card">
+      <div class="card-header">
+        <h1>&#128274; Restricted Access</h1>
+        <p>Enter admin credentials to continue</p>
+      </div>
+      <div id="admin-login-msg" class="admin-msg"></div>
+      <form id="admin-login-form" class="form active">
+        <div class="input-group">
+          <span class="input-icon">&#128272;</span>
+          <input type="password" id="admin-password-input" placeholder="Admin password" required autocomplete="off" />
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">Enter</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin Dashboard -->
+  <div id="admin-dashboard" class="container hidden">
+    <div class="card admin-dashboard">
+      <div class="admin-header">
+        <h1>&#128272; Auth Codes</h1>
+        <button id="admin-logout-btn" class="btn btn-outline btn-sm">Logout</button>
+      </div>
+      <div id="admin-dash-msg" class="admin-msg"></div>
+
+      <div class="generate-row">
+        <div class="generate-form">
+          <input type="text" id="generate-name-input" placeholder="Verified name (optional)" />
+          <button id="generate-code-btn" class="btn btn-primary">&#43; Generate Auth Code</button>
+        </div>
+      </div>
+
+      <div id="code-list" class="code-list">
+        <div class="admin-empty">Loading...</div>
+      </div>
+
+      <div id="load-more-row" class="load-more-row hidden">
+        <button id="load-more-btn" class="btn btn-outline btn-sm">Load More</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="copy-toast" class="copy-toast">Copied!</div>
+
+  <script>
+    const adminUrlSecret = window.location.pathname.split('/').pop();
+    let adminToken = null;
+    let loadedCodes = [];
+    let hasMore = false;
+
+    const loginSection = document.getElementById('admin-login');
+    const dashSection = document.getElementById('admin-dashboard');
+    const loginForm = document.getElementById('admin-login-form');
+    const loginMsg = document.getElementById('admin-login-msg');
+    const dashMsg = document.getElementById('admin-dash-msg');
+    const codeList = document.getElementById('code-list');
+    const loadMoreRow = document.getElementById('load-more-row');
+    const copyToast = document.getElementById('copy-toast');
+
+    function showLoginMsg(text, type) {
+      loginMsg.textContent = text;
+      loginMsg.className = 'admin-msg ' + type;
+    }
+
+    function showDashMsg(text, type) {
+      dashMsg.textContent = text;
+      dashMsg.className = 'admin-msg ' + type;
+      setTimeout(() => { dashMsg.className = 'admin-msg'; }, 3000);
+    }
+
+    function esc(str) {
+      const div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+
+    function showCopyToast() {
+      copyToast.classList.add('show');
+      setTimeout(() => copyToast.classList.remove('show'), 1500);
+    }
+
+    // Login
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pw = document.getElementById('admin-password-input').value;
+      if (!pw) return;
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urlSecret: adminUrlSecret, password: pw }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showLoginMsg(data.error || 'Access denied', 'error');
+          return;
+        }
+        adminToken = data.token;
+        loginSection.classList.add('hidden');
+        dashSection.classList.remove('hidden');
+        loadCodes(true);
+      } catch {
+        showLoginMsg('Connection error', 'error');
+      }
+    });
+
+    document.getElementById('admin-logout-btn').addEventListener('click', () => {
+      adminToken = null;
+      loadedCodes = [];
+      dashSection.classList.add('hidden');
+      loginSection.classList.remove('hidden');
+      document.getElementById('admin-password-input').value = '';
+      loginMsg.className = 'admin-msg';
+    });
+
+    async function adminFetch(url, opts = {}) {
+      const res = await fetch(url, {
+        ...opts,
+        headers: { 'Authorization': `Bearer ${adminToken}`, ...opts.headers },
+      });
+      if (res.status === 401 || res.status === 403) {
+        adminToken = null;
+        dashSection.classList.add('hidden');
+        loginSection.classList.remove('hidden');
+        showLoginMsg('Session expired, please login again', 'error');
+        return null;
+      }
+      return res.json();
+    }
+
+    // Load codes (paginated)
+    async function loadCodes(reset) {
+      try {
+        if (reset) loadedCodes = [];
+        const skip = loadedCodes.length;
+        const data = await adminFetch(`/api/admin/codes?skip=${skip}&limit=10`);
+        if (!data) return;
+        loadedCodes = loadedCodes.concat(data.codes);
+        hasMore = data.hasMore;
+        renderCodes();
+      } catch {
+        showDashMsg('Failed to load codes', 'error');
+      }
+    }
+
+    function renderCodes() {
+      if (loadedCodes.length === 0) {
+        codeList.innerHTML = '<div class="admin-empty">No auth codes yet. Generate one above.</div>';
+        loadMoreRow.classList.add('hidden');
+        return;
+      }
+
+      codeList.innerHTML = loadedCodes.map(c => {
+        let badgeClass, badgeText;
+        if (c.status === 'blocked') {
+          badgeClass = 'badge-blocked';
+          badgeText = 'Blocked';
+        } else if (c.status === 'active' && c.username) {
+          badgeClass = 'badge-connected';
+          badgeText = 'Connected';
+        } else {
+          badgeClass = 'badge-ready';
+          badgeText = 'Ready to connect';
+        }
+
+        const userInfo = c.username ? ` &middot; ${esc(c.username)}` : '';
+        const dateStr = new Date(c.createdAt).toLocaleDateString();
+
+        let actionBtn = '';
+        if (c.status === 'blocked') {
+          actionBtn = `<button class="btn-block unblock" onclick="toggleBlock('${c._id}','active')">Unblock</button>`;
+        } else if (c.status === 'active') {
+          actionBtn = `<button class="btn-block block" onclick="toggleBlock('${c._id}','blocked')">Block</button>`;
+        }
+
+        const verifiedHtml = c.verifiedName
+          ? `<span class="code-verified"><span class="blue-tick">&#10004;&#65039;</span> ${esc(c.verifiedName)}</span>`
+          : '';
+
+        const nameEditHtml = `
+          <div class="name-edit-row">
+            <input type="text" id="name-input-${c._id}" value="${esc(c.verifiedName || '')}" placeholder="Set verified name" />
+            <button class="btn-name" onclick="saveName('${c._id}')">Save</button>
+          </div>
+        `;
+
+        return `
+          <div class="code-item" id="code-${c._id}">
+            <div class="code-info">
+              <span class="code-value" title="Click to copy" onclick="copyCode(this)">${esc(c.code)}</span>
+              <span class="code-meta">${dateStr}${userInfo}</span>
+              ${verifiedHtml}
+              ${nameEditHtml}
+            </div>
+            <div class="code-actions">
+              <span class="admin-badge ${badgeClass}">${badgeText}</span>
+              ${actionBtn}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      if (hasMore) {
+        loadMoreRow.classList.remove('hidden');
+      } else {
+        loadMoreRow.classList.add('hidden');
+      }
+    }
+
+    // Generate new code
+    document.getElementById('generate-code-btn').addEventListener('click', async () => {
+      try {
+        const verifiedName = document.getElementById('generate-name-input').value.trim();
+        const data = await adminFetch('/api/admin/generate-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ verifiedName: verifiedName || undefined }),
+        });
+        if (!data) return;
+        loadedCodes.unshift(data);
+        renderCodes();
+        document.getElementById('generate-name-input').value = '';
+        showDashMsg('Auth code generated', 'success');
+      } catch {
+        showDashMsg('Failed to generate code', 'error');
+      }
+    });
+
+    // Load more
+    document.getElementById('load-more-btn').addEventListener('click', () => loadCodes(false));
+
+    // Block / Unblock
+    async function toggleBlock(codeId, newStatus) {
+      try {
+        const data = await adminFetch(`/api/admin/codes/${codeId}/status`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        if (!data) return;
+        const idx = loadedCodes.findIndex(c => c._id === codeId);
+        if (idx !== -1) {
+          loadedCodes[idx].status = newStatus;
+          renderCodes();
+        }
+        showDashMsg(data.message, 'success');
+      } catch {
+        showDashMsg('Failed to update status', 'error');
+      }
+    }
+
+    // Save verified name
+    async function saveName(codeId) {
+      try {
+        const input = document.getElementById(`name-input-${codeId}`);
+        const verifiedName = input.value.trim();
+        const data = await adminFetch(`/api/admin/codes/${codeId}/name`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ verifiedName: verifiedName || null }),
+        });
+        if (!data) return;
+        const idx = loadedCodes.findIndex(c => c._id === codeId);
+        if (idx !== -1) {
+          loadedCodes[idx].verifiedName = data.verifiedName;
+          renderCodes();
+        }
+        showDashMsg(data.message, 'success');
+      } catch {
+        showDashMsg('Failed to update name', 'error');
+      }
+    }
+
+    // Copy code to clipboard
+    function copyCode(el) {
+      const text = el.textContent;
+      navigator.clipboard.writeText(text).then(() => showCopyToast()).catch(() => {});
+    }
+  </script>
+</body>
+</html>

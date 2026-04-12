@@ -50,6 +50,12 @@ async function init() {
     document.getElementById('precall-owner-name').textContent = linkInfo.ownerUsername;
     document.getElementById('precall-link-name').textContent = linkInfo.name;
 
+    // Show verified name with blue tick if present
+    if (linkInfo.verifiedName) {
+      document.getElementById('precall-verified-name').textContent = linkInfo.verifiedName;
+      document.getElementById('precall-verified-row').classList.remove('hidden');
+    }
+
     // Show chat button if chat is enabled
     if (linkInfo.chatEnabled) {
       document.getElementById('start-chat-btn').classList.remove('hidden');

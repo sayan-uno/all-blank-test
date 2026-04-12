@@ -9,9 +9,12 @@ const jwt = require('jsonwebtoken');
 const authRoutes = require('./routes/auth');
 const linkRoutes = require('./routes/links');
 const chatRoutes = require('./routes/chat');
+const adminRoutes = require('./routes/admin');
 const CallLink = require('./models/CallLink');
 const CallHistory = require('./models/CallHistory');
 const ChatMessage = require('./models/ChatMessage');
+const AuthCode = require('./models/AuthCode');
+const User = require('./models/User');
 
 const app = express();
 const server = http.createServer(app);
@@ -20,12 +23,28 @@ const io = new Server(server);
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
+
+// Block direct access to admin.html
+app.use((req, res, next) => {
+  if (req.path === '/admin.html') return res.status(404).send('Not Found');
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/links', linkRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/admin', adminRoutes);
+
+// Serve admin page — URL secret acts as the first gate
+app.get('/admin-panel/:urlSecret', (req, res) => {
+  if (!process.env.ADMIN_URL_SECRET || req.params.urlSecret !== process.env.ADMIN_URL_SECRET) {
+    return res.status(404).sendFile(path.join(__dirname, 'public', 'index.html'));
+  }
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 // Serve caller page for /call/:linkId
 app.get('/call/:linkId', (_req, res) => {
@@ -40,6 +59,9 @@ app.get('/{*splat}', (_req, res) => {
 // ===== Socket.IO Signaling =====
 // Track online owners: { userId: socketId }
 const onlineOwners = new Map();
+// Share onlineOwners and io with admin route
+app.locals.onlineOwners = onlineOwners;
+app.locals.io = io;
 // Track active calls: { callerSocketId: ownerSocketId } and reverse
 const callPairs = new Map();
 // Track ringing timeouts: { callerSocketId: timeoutId }
@@ -60,7 +82,7 @@ function parseCookies(cookieStr) {
   return cookies;
 }
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   // Auto-authenticate from httpOnly cookie in handshake
   try {
     const cookies = parseCookies(socket.handshake.headers.cookie);
@@ -68,6 +90,15 @@ io.on('connection', (socket) => {
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       socket.userId = decoded.userId;
+
+      // Check auth code status before allowing connection
+      const user = await User.findById(decoded.userId).populate('authCode');
+      if (!user || !user.authCode || user.authCode.status === 'blocked') {
+        socket.emit('auth-blocked');
+        socket.disconnect(true);
+        return;
+      }
+
       onlineOwners.set(decoded.userId, socket.id);
       socket.join(`owner-${decoded.userId}`);
 

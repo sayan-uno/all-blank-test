@@ -21,6 +21,11 @@ const userSchema = new mongoose.Schema({
     trim: true,
     lowercase: true,
   },
+  authCode: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'AuthCode',
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

@@ -1,23 +1,12 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
-const jwt = require('jsonwebtoken');
 const CallLink = require('../models/CallLink');
 const CallHistory = require('../models/CallHistory');
 const ChatMessage = require('../models/ChatMessage');
+const AuthCode = require('../models/AuthCode');
+const { authenticateToken, requireAuthCode } = require('../middleware/auth');
 
 const router = express.Router();
-
-function authenticateToken(req, res, next) {
-  const token = req.cookies.token;
-  if (!token) return res.status(401).json({ error: 'Not authenticated' });
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.userId;
-    next();
-  } catch {
-    return res.status(401).json({ error: 'Invalid token' });
-  }
-}
 
 // Convert 24h "HH:MM" to 12h "h:MM AM/PM"
 function to12Hour(time24) {
@@ -81,7 +70,7 @@ function formatScheduleMessage(schedule, timezone) {
 }
 
 // Create a new call link
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', authenticateToken, requireAuthCode, async (req, res) => {
   try {
     const { name, schedule, expiresAt, fallbackMessage, timezone, callEnabled, chatEnabled, chatSeenEnabled } = req.body;
     if (!name || !name.trim()) {
@@ -157,7 +146,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // Get all links for current user
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, requireAuthCode, async (req, res) => {
   try {
     const links = await CallLink.find({ owner: req.userId }).sort({ createdAt: -1 });
     res.json(links.map(l => ({
@@ -178,7 +167,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Reset (regenerate) a link
-router.put('/:linkId/reset', authenticateToken, async (req, res) => {
+router.put('/:linkId/reset', authenticateToken, requireAuthCode, async (req, res) => {
   try {
     const link = await CallLink.findOne({ linkId: req.params.linkId, owner: req.userId });
     if (!link) return res.status(404).json({ error: 'Link not found' });
@@ -193,7 +182,7 @@ router.put('/:linkId/reset', authenticateToken, async (req, res) => {
 });
 
 // Update link configuration (keeps same linkId/URL)
-router.put('/:linkId', authenticateToken, async (req, res) => {
+router.put('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
   try {
     const link = await CallLink.findOne({ linkId: req.params.linkId, owner: req.userId });
     if (!link) return res.status(404).json({ error: 'Link not found' });
@@ -277,7 +266,7 @@ router.put('/:linkId', authenticateToken, async (req, res) => {
 });
 
 // Delete a link
-router.delete('/:linkId', authenticateToken, async (req, res) => {
+router.delete('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
   try {
     const link = await CallLink.findOneAndDelete({ linkId: req.params.linkId, owner: req.userId });
     if (!link) return res.status(404).json({ error: 'Link not found' });
@@ -290,7 +279,7 @@ router.delete('/:linkId', authenticateToken, async (req, res) => {
 });
 
 // Get call history for current user (must be before /:linkId routes)
-router.get('/history/list', authenticateToken, async (req, res) => {
+router.get('/history/list', authenticateToken, requireAuthCode, async (req, res) => {
   try {
     const history = await CallHistory.find({ owner: req.userId })
       .sort({ time: -1 })
@@ -302,7 +291,7 @@ router.get('/history/list', authenticateToken, async (req, res) => {
 });
 
 // Clear call history
-router.delete('/history/clear', authenticateToken, async (req, res) => {
+router.delete('/history/clear', authenticateToken, requireAuthCode, async (req, res) => {
   try {
     await CallHistory.deleteMany({ owner: req.userId });
     res.json({ message: 'History cleared' });
@@ -314,8 +303,15 @@ router.delete('/history/clear', authenticateToken, async (req, res) => {
 // Public: get link info (for caller page) — includes availability check
 router.get('/:linkId/info', async (req, res) => {
   try {
-    const link = await CallLink.findOne({ linkId: req.params.linkId }).populate('owner', 'username');
+    const link = await CallLink.findOne({ linkId: req.params.linkId }).populate('owner', 'username authCode');
     if (!link) return res.status(404).json({ error: 'Link not found' });
+
+    // Look up verified name from the owner's auth code
+    let verifiedName = null;
+    if (link.owner.authCode) {
+      const ac = await AuthCode.findById(link.owner.authCode).lean();
+      if (ac && ac.verifiedName) verifiedName = ac.verifiedName;
+    }
 
     // Check expiry
     if (link.expiresAt && new Date() > link.expiresAt) {
@@ -330,6 +326,7 @@ router.get('/:linkId/info', async (req, res) => {
         linkId: link.linkId,
         name: link.name,
         ownerUsername: link.owner.username,
+        verifiedName,
         expired: true,
       });
     }
@@ -351,6 +348,7 @@ router.get('/:linkId/info', async (req, res) => {
       linkId: link.linkId,
       name: link.name,
       ownerUsername: link.owner.username,
+      verifiedName,
       expired: false,
       available: scheduleCheck.available,
       unavailableReason: scheduleCheck.reason || null,
