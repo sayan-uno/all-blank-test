@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CallDrop</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg-shapes">
+    <div class="shape shape-1"></div>
+    <div class="shape shape-2"></div>
+    <div class="shape shape-3"></div>
+  </div>
+
+  <!-- ========== AUTH CARD ========== -->
+  <div id="auth-section" class="container">
+    <div class="card">
+      <div class="card-header">
+        <h1 id="card-title">Welcome Back</h1>
+        <p id="card-subtitle">Sign in to your account</p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Login</button>
+        <button class="tab" data-tab="register">Register</button>
+      </div>
+
+      <form id="login-form" class="form active">
+        <div class="input-group">
+          <span class="input-icon">&#128100;</span>
+          <input type="text" id="login-username" placeholder="Username" autocomplete="username" required />
+        </div>
+        <div class="input-group">
+          <span class="input-icon">&#128274;</span>
+          <input type="password" id="login-password" placeholder="Password" autocomplete="current-password" required />
+        </div>
+        <button type="submit" class="btn btn-primary">Sign In</button>
+        <p class="link-text">Forgot password? <a href="#" id="show-forgot">Reset it here</a></p>
+      </form>
+
+      <form id="register-form" class="form">
+        <div class="input-group">
+          <span class="input-icon">&#128100;</span>
+          <input type="text" id="reg-username" placeholder="Choose a username" autocomplete="username" required />
+        </div>
+        <div class="input-group">
+          <span class="input-icon">&#128274;</span>
+          <input type="password" id="reg-password" placeholder="Create password (min 6 chars)" autocomplete="new-password" required />
+        </div>
+        <div class="input-group">
+          <span class="input-icon">&#128274;</span>
+          <input type="password" id="reg-confirm" placeholder="Confirm password" autocomplete="new-password" required />
+        </div>
+        <button type="submit" class="btn btn-primary">Create Account</button>
+      </form>
+
+      <form id="forgot-form" class="form">
+        <div class="input-group">
+          <span class="input-icon">&#128100;</span>
+          <input type="text" id="forgot-username" placeholder="Your username" required />
+        </div>
+        <div class="input-group">
+          <span class="input-icon">&#9993;</span>
+          <input type="email" id="forgot-email" placeholder="Recovery email" required />
+        </div>
+        <div class="input-group">
+          <span class="input-icon">&#128274;</span>
+          <input type="password" id="forgot-new-password" placeholder="New password (min 6 chars)" required />
+        </div>
+        <button type="submit" class="btn btn-primary">Reset Password</button>
+        <p class="link-text"><a href="#" id="back-to-login">&larr; Back to login</a></p>
+      </form>
+
+      <div id="message" class="message hidden"></div>
+    </div>
+  </div>
+
+  <!-- ========== DASHBOARD ========== -->
+  <div id="dashboard-section" class="container-wide hidden">
+    <div class="card dashboard-card">
+      <!-- Header -->
+      <div class="dash-header">
+        <div>
+          <h1>CallDrop</h1>
+          <p>Welcome, <span id="dash-username" class="highlight"></span></p>
+        </div>
+        <div class="dash-header-actions">
+          <button id="settings-btn" class="icon-btn" title="Settings">&#9881;</button>
+          <button id="logout-btn" class="icon-btn" title="Sign Out">&#9211;</button>
+        </div>
+      </div>
+
+      <!-- Settings Panel (hidden by default) -->
+      <div id="settings-panel" class="settings-panel hidden">
+        <h3 class="section-title">Account Settings</h3>
+        <div class="info-row">
+          <span class="info-label">Username</span>
+          <span id="info-username" class="info-value"></span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Recovery Email</span>
+          <span id="info-email" class="info-value">Not set</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Member Since</span>
+          <span id="info-date" class="info-value"></span>
+        </div>
+        <form id="email-form" class="form active" style="margin-top: 12px;">
+          <div class="input-group">
+            <span class="input-icon">&#9993;</span>
+            <input type="email" id="recovery-email" placeholder="your@email.com" required />
+          </div>
+          <button type="submit" class="btn btn-secondary btn-sm">Save Recovery Email</button>
+        </form>
+        <div id="dash-message" class="message hidden"></div>
+      </div>
+
+      <!-- Call Links Card -->
+      <div class="dash-card">
+        <div class="links-header">
+          <h2>Your Call Links</h2>
+          <div class="links-header-actions">
+            <button id="sort-links-btn" class="icon-btn sort-btn" title="Sort: Newest first">&#8693;</button>
+            <button id="add-link-btn" class="fab" title="Create new link">&#43;</button>
+          </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="search-bar">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="link-search-input" placeholder="Search links..." autocomplete="off" />
+          <button id="search-clear-btn" class="search-clear hidden" title="Clear">&times;</button>
+        </div>
+
+        <!-- Create Link Form (hidden) -->
+        <div id="create-link-panel" class="create-link-panel hidden">
+          <form id="create-link-form" class="form active">
+            <h3 id="link-form-title" class="form-panel-title">Create Link</h3>
+            <div class="input-group">
+              <span class="input-icon">&#128279;</span>
+              <input type="text" id="link-name-input" placeholder="Give this link a name..." maxlength="50" required />
+            </div>
+
+            <!-- Schedule Toggle -->
+            <div class="schedule-toggle">
+              <label class="toggle-label">
+                <input type="checkbox" id="enable-schedule" />
+                <span>Set availability schedule</span>
+              </label>
+            </div>
+
+            <!-- Schedule Builder (hidden until toggled) -->
+            <div id="schedule-builder" class="schedule-builder hidden">
+              <div class="timezone-selector">
+                <label class="tz-option">
+                  <input type="radio" name="timezone" value="IST" checked />
+                  <span class="tz-label">&#127470;&#127475; Indian (IST)</span>
+                </label>
+                <label class="tz-option">
+                  <input type="radio" name="timezone" value="UTC" />
+                  <span class="tz-label">&#127760; International (UTC)</span>
+                </label>
+              </div>
+              <div class="schedule-days" id="schedule-days">
+                <label class="day-check"><input type="checkbox" value="1" /> Mon</label>
+                <label class="day-check"><input type="checkbox" value="2" /> Tue</label>
+                <label class="day-check"><input type="checkbox" value="3" /> Wed</label>
+                <label class="day-check"><input type="checkbox" value="4" /> Thu</label>
+                <label class="day-check"><input type="checkbox" value="5" /> Fri</label>
+                <label class="day-check"><input type="checkbox" value="6" /> Sat</label>
+                <label class="day-check"><input type="checkbox" value="0" /> Sun</label>
+              </div>
+              <div class="schedule-time-row">
+                <div class="input-group input-sm">
+                  <span class="input-icon">&#128336;</span>
+                  <input type="time" id="schedule-start" value="10:00" />
+                </div>
+                <span class="time-sep">to</span>
+                <div class="input-group input-sm">
+                  <span class="input-icon">&#128337;</span>
+                  <input type="time" id="schedule-end" value="16:00" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Expiry Toggle -->
+            <div class="schedule-toggle">
+              <label class="toggle-label">
+                <input type="checkbox" id="enable-expiry" />
+                <span>Set expiry date</span>
+              </label>
+            </div>
+            <div id="expiry-builder" class="hidden" style="margin-bottom:12px;">
+              <div class="input-group">
+                <span class="input-icon">&#128197;</span>
+                <input type="datetime-local" id="expiry-input" />
+              </div>
+            </div>
+
+            <!-- Fallback Message -->
+            <div class="schedule-toggle">
+              <label class="toggle-label">
+                <input type="checkbox" id="enable-fallback" />
+                <span>Custom busy message</span>
+              </label>
+            </div>
+            <div id="fallback-builder" class="hidden" style="margin-bottom:12px;">
+              <div class="input-group">
+                <span class="input-icon">&#128172;</span>
+                <input type="text" id="fallback-input" placeholder="e.g. All executives are busy, try after few min..." maxlength="200" />
+              </div>
+            </div>
+
+            <!-- Call Toggle -->
+            <div class="schedule-toggle">
+              <label class="toggle-label">
+                <input type="checkbox" id="enable-call" checked />
+                <span>Enable calling on this link</span>
+              </label>
+            </div>
+
+            <!-- Chat Toggle -->
+            <div class="schedule-toggle">
+              <label class="toggle-label">
+                <input type="checkbox" id="enable-chat" />
+                <span>Enable chat on this link</span>
+              </label>
+            </div>
+
+            <!-- Chat Seen Toggle (only visible when chat is enabled) -->
+            <div id="chat-seen-toggle" class="schedule-toggle hidden" style="margin-left: 24px;">
+              <label class="toggle-label">
+                <input type="checkbox" id="enable-chat-seen" />
+                <span>Let visitors see read receipts</span>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" id="link-form-submit" class="btn btn-primary btn-sm">Create Link</button>
+              <button type="button" id="cancel-link-btn" class="btn btn-outline btn-sm">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Links List -->
+        <div id="links-list" class="links-list">
+          <p class="empty-state">No links yet. Click <strong>+</strong> to create one.</p>
+        </div>
+        <button id="load-more-links" class="btn btn-outline btn-sm load-more-btn hidden">Load More</button>
+      </div>
+
+      <!-- Notifications Card -->
+      <div class="dash-card" id="notifications-card">
+        <div id="missed-calls-section" class="missed-calls-section hidden">
+          <div class="missed-calls-header">
+            <h3 class="section-title">&#128276; Notifications</h3>
+            <button id="clear-missed-btn" class="btn btn-outline btn-sm">Clear</button>
+          </div>
+          <div id="missed-calls-list" class="missed-calls-list"></div>
+        </div>
+      </div>
+
+      <!-- Call History Card -->
+      <div class="dash-card">
+        <div id="history-section" class="history-section">
+          <div class="history-header">
+            <h3 class="section-title">&#128214; Call History</h3>
+            <button id="clear-history-btn" class="btn btn-outline btn-sm">Clear</button>
+          </div>
+          <div id="history-list" class="history-list">
+            <p class="empty-state">No call history yet.</p>
+          </div>
+          <button id="load-more-history" class="btn btn-outline btn-sm load-more-btn hidden">Load More</button>
+        </div>
+      </div>
+
+      <!-- Incoming Calls Container (supports multiple stacked popups) -->
+      <div id="incoming-calls-container"></div>
+    </div>
+  </div>
+
+  <!-- ========== IN-CALL SCREEN ========== -->
+  <div id="call-screen" class="container hidden">
+    <div class="card call-card">
+      <div class="call-status-bar">
+        <span id="call-status-text">Connected</span>
+        <span id="call-timer">00:00</span>
+      </div>
+      <div class="call-avatar">
+        <div class="avatar-circle" id="call-avatar-circle">
+          <span id="call-avatar-letter"></span>
+        </div>
+        <h2 id="call-peer-name"></h2>
+        <p id="call-peer-sub" class="call-sub"></p>
+      </div>
+      <div class="call-controls">
+        <button id="mute-btn" class="call-ctrl-btn" title="Mute">&#127908;</button>
+        <button id="incall-chat-btn" class="call-ctrl-btn hidden" title="Chat">&#128488;</button>
+        <button id="end-call-btn" class="call-ctrl-btn end-btn" title="End Call">&#128222;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== OWNER CHAT PANEL (overlay) ========== -->
+  <div id="owner-chat-panel" class="container hidden">
+    <div class="card chat-card">
+      <div class="chat-header">
+        <button id="owner-chat-back-btn" class="chat-back-btn" title="Back">&#8592;</button>
+        <h3 id="owner-chat-header-name">Chat</h3>
+        <button id="owner-chat-clear-btn" class="btn btn-outline btn-sm">Clear Chat</button>
+      </div>
+      <div id="owner-chat-messages" class="chat-messages"></div>
+      <div id="owner-chat-typing" class="chat-typing hidden">typing...</div>
+      <div class="chat-input-bar">
+        <button id="owner-chat-attach-btn" class="chat-input-btn" title="Attach file">&#128206;</button>
+        <input type="text" id="owner-chat-text-input" placeholder="Type a message..." autocomplete="off" />
+        <button id="owner-chat-voice-btn" class="chat-input-btn" title="Voice message">&#127908;</button>
+        <button id="owner-chat-send-btn" class="chat-input-btn chat-send" title="Send">&#10148;</button>
+      </div>
+      <input type="file" id="owner-chat-file-input" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar" />
+    </div>
+  </div>
+
+  <audio id="remote-audio" autoplay playsinline></audio>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

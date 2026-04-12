@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CallDrop - Calling...</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="bg-shapes">
+    <div class="shape shape-1"></div>
+    <div class="shape shape-2"></div>
+    <div class="shape shape-3"></div>
+  </div>
+
+  <!-- ========== PRE-CALL SCREEN (shows link info + Call button) ========== -->
+  <div id="precall-section" class="container">
+    <div class="card call-card">
+      <div class="call-avatar">
+        <div class="avatar-circle" id="precall-avatar-circle">
+          <span id="precall-avatar-letter"></span>
+        </div>
+        <h2 id="precall-owner-name">Loading...</h2>
+        <p id="precall-link-name" class="call-sub"></p>
+      </div>
+      <button id="start-call-btn" class="btn btn-primary" style="width:100%; margin-top: 8px;">&#128222; Call</button>
+      <button id="start-chat-btn" class="btn btn-secondary hidden" style="width:100%; margin-top: 8px;">&#128488; Chat</button>
+    </div>
+  </div>
+
+  <!-- ========== CALLING SCREEN (ringing / connected) ========== -->
+  <div id="caller-section" class="container hidden">
+    <div class="card call-card">
+      <div class="call-status-bar">
+        <span id="caller-status-text">Ringing...</span>
+        <span id="caller-timer" class="hidden">00:00</span>
+      </div>
+      <div class="call-avatar">
+        <div class="avatar-circle ringing" id="caller-avatar-circle">
+          <span id="caller-avatar-letter"></span>
+        </div>
+        <h2 id="caller-peer-name">Loading...</h2>
+        <p id="caller-peer-sub" class="call-sub"></p>
+        <p id="caller-countdown" class="call-sub countdown-text"></p>
+      </div>
+      <div class="call-controls">
+        <button id="caller-mute-btn" class="call-ctrl-btn hidden" title="Mute">&#127908;</button>
+        <button id="caller-chat-toggle-btn" class="call-ctrl-btn hidden" title="Chat">&#128488;</button>
+        <button id="caller-end-btn" class="call-ctrl-btn end-btn" title="End Call">&#128222;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== CHAT SECTION ========== -->
+  <div id="chat-section" class="container hidden">
+    <div class="card chat-card">
+      <div class="chat-header">
+        <button id="chat-back-btn" class="chat-back-btn" title="Back">&#8592;</button>
+        <h3 id="chat-header-name">Chat</h3>
+        <button id="chat-call-btn" class="btn btn-primary btn-sm">&#128222; Call</button>
+      </div>
+      <div id="chat-messages" class="chat-messages"></div>
+      <div id="chat-typing-indicator" class="chat-typing hidden">typing...</div>
+      <div class="chat-input-bar">
+        <button id="chat-attach-btn" class="chat-input-btn" title="Attach file">&#128206;</button>
+        <input type="text" id="chat-text-input" placeholder="Type a message..." autocomplete="off" />
+        <button id="chat-voice-btn" class="chat-input-btn" title="Voice message">&#127908;</button>
+        <button id="chat-send-btn" class="chat-input-btn chat-send" title="Send">&#10148;</button>
+      </div>
+      <input type="file" id="chat-file-input" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar" />
+    </div>
+  </div>
+
+  <!-- Error state -->
+  <div id="caller-error" class="container hidden">
+    <div class="card">
+      <div class="card-header">
+        <h1>Link Not Found</h1>
+        <p>This call link is invalid or has been removed.</p>
+      </div>
+    </div>
+  </div>
+
+  <audio id="remote-audio" autoplay playsinline></audio>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/caller.js"></script>
+</body>
+</html>
