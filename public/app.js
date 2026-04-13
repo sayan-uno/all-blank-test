@@ -1380,6 +1380,10 @@ function renderStaffLinks(links) {
       ? '<span class="mgmt-link-status joined" style="margin-left:6px;">🔐 Delete</span>'
       : '';
 
+    const deleteBtn = currentUser && currentUser.canDelete
+      ? `<button class="mgmt-action-btn delete-btn" onclick="staffAction('${link.linkId}', 'delete')">&#128465; Delete</button>`
+      : '';
+
     return `
       <div class="mgmt-link-card">
         <div class="mgmt-link-top">
@@ -1393,7 +1397,7 @@ function renderStaffLinks(links) {
         <div class="mgmt-link-actions">
           <button class="mgmt-action-btn copy-btn" onclick="copyStaffLink('${joinUrl}')">&#128203; Copy Link</button>
           ${pauseBtn}
-          <button class="mgmt-action-btn delete-btn" onclick="staffAction('${link.linkId}', 'delete')">&#128465; Delete</button>
+          ${deleteBtn}
         </div>
       </div>
     `;
@@ -1481,6 +1485,10 @@ function renderCustomerLinks(links) {
       ? `<button class="mgmt-action-btn pause-btn" onclick="customerAction('${link.linkId}', 'pause')">⏸ Pause</button>`
       : `<button class="mgmt-action-btn resume-btn" onclick="customerAction('${link.linkId}', 'resume')">▶ Resume</button>`;
 
+    const deleteBtn = currentUser && currentUser.canDelete
+      ? `<button class="mgmt-action-btn delete-btn" onclick="customerAction('${link.linkId}', 'delete')">&#128465; Delete</button>`
+      : '';
+
     return `
       <div class="mgmt-link-card">
         <div class="mgmt-link-top">
@@ -1494,7 +1502,7 @@ function renderCustomerLinks(links) {
         <div class="mgmt-link-actions">
           <button class="mgmt-action-btn copy-btn" onclick="copyCustomerLink('${joinUrl}')">&#128203; Copy Link</button>
           ${pauseBtn}
-          <button class="mgmt-action-btn delete-btn" onclick="customerAction('${link.linkId}', 'delete')">&#128465; Delete</button>
+          ${deleteBtn}
         </div>
       </div>
     `;

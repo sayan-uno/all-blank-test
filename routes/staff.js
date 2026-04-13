@@ -177,9 +177,17 @@ router.put('/:linkId/status', authenticateToken, requireAuthCode, async (req, re
 // Delete a staff link
 router.delete('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select('role');
-    if (!user || user.role !== 'owner') {
+    const currentUser = await User.findById(req.userId).select('role authCode');
+    if (!currentUser || currentUser.role !== 'owner') {
       return res.status(403).json({ error: 'Only account owners can delete staff links' });
+    }
+
+    const ac = currentUser.authCode ? await AuthCode.findById(currentUser.authCode).lean() : null;
+    let canDelete = false;
+    if (currentUser.role === 'owner' && ac && ac.allowDelete) canDelete = true;
+    
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Delete permission not granted for your account' });
     }
 
     const link = await StaffLink.findOne({ linkId: req.params.linkId, owner: req.userId });

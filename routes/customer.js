@@ -134,6 +134,23 @@ router.put('/:linkId/status', authenticateToken, requireAuthCode, async (req, re
 // Delete a customer link
 router.delete('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
   try {
+    const currentUser = await User.findById(req.userId).select('role authCode');
+    if (!currentUser || (currentUser.role !== 'owner' && currentUser.role !== 'staff')) {
+      return res.status(403).json({ error: 'Only owners and staff can delete customer links' });
+    }
+
+    const ac = currentUser.authCode ? await AuthCode.findById(currentUser.authCode).lean() : null;
+    let canDelete = false;
+    if (currentUser.role === 'owner' && ac && ac.allowDelete) canDelete = true;
+    if (currentUser.role === 'staff' && ac && ac.allowDelete) {
+        const sl = await StaffLink.findOne({ connectedUser: req.userId });
+        if (sl && sl.allowDelete) canDelete = true;
+    }
+
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Delete permission not granted for your account' });
+    }
+
     const link = await CustomerLink.findOne({ linkId: req.params.linkId, owner: req.userId });
     if (!link) return res.status(404).json({ error: 'Customer link not found' });
 
