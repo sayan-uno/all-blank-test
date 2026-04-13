@@ -5,294 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin Panel</title>
   <link rel="stylesheet" href="/style.css" />
-  <style>
-    .admin-login-card {
-      max-width: 380px;
-      width: 90%;
-    }
-    .admin-dashboard {
-      max-width: 720px;
-      width: 95%;
-      padding: 32px 36px;
-    }
-    .admin-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 24px;
-    }
-    .admin-header h1 {
-      font-size: 1.5rem;
-      color: #e0e0e0;
-    }
-    .admin-msg {
-      text-align: center;
-      padding: 8px;
-      border-radius: 8px;
-      font-size: 0.85rem;
-      margin-bottom: 12px;
-      display: none;
-    }
-    .admin-msg.error { display: block; background: rgba(229,49,112,0.15); color: #e53170; }
-    .admin-msg.success { display: block; background: rgba(44,182,125,0.15); color: #2cb67d; }
-    .generate-row {
-      display: flex;
-      justify-content: center;
-      margin-bottom: 28px;
-    }
-    .generate-row .btn {
-      padding: 12px 32px;
-      font-size: 1rem;
-    }
-    .code-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .code-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 12px;
-      padding: 14px 18px;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .code-info {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 0;
-      flex: 1;
-    }
-    .code-value {
-      font-family: monospace;
-      font-size: 0.9rem;
-      color: #7f5af0;
-      word-break: break-all;
-      cursor: pointer;
-    }
-    .code-value:hover {
-      text-decoration: underline;
-    }
-    .code-meta {
-      font-size: 0.75rem;
-      color: rgba(224,224,224,0.4);
-    }
-    .code-actions {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-shrink: 0;
-    }
-    .admin-badge {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 10px;
-      font-size: 0.72rem;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-    .badge-ready { background: rgba(127,90,240,0.2); color: #7f5af0; }
-    .badge-connected { background: rgba(44,182,125,0.2); color: #2cb67d; }
-    .badge-blocked { background: rgba(229,49,112,0.2); color: #e53170; }
-    .btn-block {
-      padding: 5px 14px;
-      font-size: 0.75rem;
-      border-radius: 8px;
-      cursor: pointer;
-      border: none;
-      font-weight: 600;
-    }
-    .btn-block.block {
-      background: rgba(229,49,112,0.2);
-      color: #e53170;
-    }
-    .btn-block.block:hover {
-      background: rgba(229,49,112,0.35);
-    }
-    .btn-block.unblock {
-      background: rgba(44,182,125,0.2);
-      color: #2cb67d;
-    }
-    .btn-block.unblock:hover {
-      background: rgba(44,182,125,0.35);
-    }
-    .load-more-row {
-      text-align: center;
-      margin-top: 18px;
-    }
-    .admin-empty {
-      text-align: center;
-      padding: 24px;
-      color: rgba(224,224,224,0.3);
-      font-size: 0.9rem;
-    }
-    .copy-toast {
-      position: fixed;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(44,182,125,0.9);
-      color: #fff;
-      padding: 8px 20px;
-      border-radius: 8px;
-      font-size: 0.85rem;
-      opacity: 0;
-      transition: opacity 0.3s;
-      pointer-events: none;
-      z-index: 999;
-    }
-    .copy-toast.show {
-      opacity: 1;
-    }
-    .generate-form {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .generate-form input {
-      padding: 10px 14px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.06);
-      color: #e0e0e0;
-      font-size: 0.9rem;
-      outline: none;
-      width: 200px;
-    }
-    .generate-form input::placeholder {
-      color: rgba(224,224,224,0.3);
-    }
-    .generate-form input:focus {
-      border-color: #7f5af0;
-    }
-    .code-verified {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 0.8rem;
-      color: #2cb67d;
-      font-weight: 600;
-    }
-    .blue-tick {
-      color: #4da6ff;
-      font-size: 0.85rem;
-    }
-    .name-edit-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 4px;
-    }
-    .name-edit-row input {
-      padding: 4px 8px;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.06);
-      color: #e0e0e0;
-      font-size: 0.75rem;
-      outline: none;
-      width: 140px;
-    }
-    .name-edit-row input:focus {
-      border-color: #7f5af0;
-    }
-    .btn-name {
-      padding: 3px 10px;
-      font-size: 0.7rem;
-      border-radius: 6px;
-      cursor: pointer;
-      border: none;
-      font-weight: 600;
-      background: rgba(127,90,240,0.2);
-      color: #7f5af0;
-    }
-    .btn-name:hover {
-      background: rgba(127,90,240,0.35);
-    }
-    .delete-auth-toggle {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.8rem;
-      color: rgba(224,224,224,0.6);
-      cursor: pointer;
-    }
-    .delete-auth-toggle input {
-      accent-color: #7f5af0;
-    }
-    .badge-delete {
-      background: rgba(255,165,0,0.2);
-      color: #ffa500;
-    }
-    .badge-no-delete {
-      background: rgba(224,224,224,0.08);
-      color: rgba(224,224,224,0.35);
-    }
-    .btn-details {
-      padding: 5px 14px;
-      font-size: 0.75rem;
-      border-radius: 8px;
-      cursor: pointer;
-      border: none;
-      font-weight: 600;
-      background: rgba(127,90,240,0.2);
-      color: #7f5af0;
-    }
-    .btn-details:hover {
-      background: rgba(127,90,240,0.35);
-    }
-    .code-details-pane {
-      flex: 1 1 100%;
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(255,255,255,0.07);
-      display: none;
-    }
-    .code-details-pane.active {
-      display: block;
-    }
-    .hierarchy-section {
-      margin-bottom: 12px;
-    }
-    .hierarchy-title {
-      font-size: 0.8rem;
-      color: #94a1b2;
-      margin-bottom: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .user-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 6px 10px;
-      background: rgba(255,255,255,0.03);
-      border-radius: 6px;
-      margin-bottom: 4px;
-      font-size: 0.85rem;
-    }
-    .user-row.indent-1 { margin-left: 15px; border-left: 2px solid #7f5af0; }
-    .user-row.indent-2 { margin-left: 30px; border-left: 2px solid #2cb67d; }
-    
-    .btn-temp-login {
-      background: transparent;
-      color: #2cb67d;
-      border: 1px solid #2cb67d;
-      border-radius: 4px;
-      padding: 3px 8px;
-      font-size: 0.7rem;
-      cursor: pointer;
-    }
-    .btn-temp-login:hover {
-      background: rgba(44,182,125,0.15);
-    }
-  </style>
+
 </head>
 <body>
   <div class="bg-shapes">
@@ -302,8 +15,8 @@
   </div>
 
   <!-- Admin Login -->
-  <div id="admin-login" class="container">
-    <div class="card admin-login-card">
+  <div id="admin-login" class="page-wrapper auth-wrapper">
+    <div class="auth-box">
       <div class="card-header">
         <h1>&#128274; Restricted Access</h1>
         <p>Enter admin credentials to continue</p>
@@ -320,26 +33,36 @@
   </div>
 
   <!-- Admin Dashboard -->
-  <div id="admin-dashboard" class="container hidden">
-    <div class="card admin-dashboard">
-      <div class="admin-header">
-        <h1>&#128272; Auth Codes</h1>
-        <button id="admin-logout-btn" class="btn btn-outline btn-sm">Logout</button>
+  <div id="admin-dashboard" class="page-wrapper hidden">
+    <!-- Top Nav -->
+    <header class="top-nav">
+      <div class="nav-brand">
+        <h1>Command Center</h1>
       </div>
-      <div id="admin-dash-msg" class="admin-msg"></div>
+      <div class="nav-actions">
+        <button id="admin-logout-btn" class="btn btn-outline btn-sm" style="color:#e53170; border-color:#e53170;">Force Logout</button>
+      </div>
+    </header>
 
-      <!-- Global Search Bar -->
-      <div class="search-bar" style="margin-bottom:20px;">
-        <span class="search-icon">&#128269;</span>
-        <input type="text" id="global-search-input" placeholder="Search across all users (owners, staff, customers)..." autocomplete="off" style="width: calc(100% - 30px); padding: 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: white;" />
-        <button id="global-search-clear-btn" class="search-clear hidden" title="Clear" style="margin-left: -25px; background: none; border: none; color: #94a1b2; cursor: pointer;">&times;</button>
-      </div>
+    <main class="main-content">
+      <div class="content-block">
+        <div class="links-header">
+          <h2>&#128272; Global Auth Code Management</h2>
+        </div>
+        <div id="admin-dash-msg" class="admin-msg"></div>
 
-      <!-- Global Search Results Container -->
-      <div id="global-search-results" class="code-list hidden" style="margin-bottom:20px; padding: 15px; border: 1px solid #7f5af0; border-radius: 8px;">
-        <h3 class="section-title" style="margin-top:0; color:#7f5af0;">Search Results</h3>
-        <div id="global-search-list"></div>
-      </div>
+        <!-- Global Search Bar -->
+        <div class="search-bar">
+          <span class="search-icon">&#128269;</span>
+          <input type="text" id="global-search-input" placeholder="Search across all users..." autocomplete="off" />
+          <button id="global-search-clear-btn" class="search-clear hidden" title="Clear">&times;</button>
+        </div>
+
+        <!-- Global Search Results Container -->
+        <div id="global-search-results" class="code-list hidden" style="margin-bottom:32px; padding: 24px; border: 1px solid rgba(127,90,240,0.4); border-radius: 16px; background: rgba(127,90,240,0.05);">
+          <h3 class="section-title" style="margin-top:0; color:#b49af0; border:none; padding-bottom:0;">Matched Users</h3>
+          <div id="global-search-list"></div>
+        </div>
 
       <div class="generate-row">
         <div class="generate-form">
@@ -352,14 +75,15 @@
         </div>
       </div>
 
-      <div id="code-list" class="code-list">
-        <div class="admin-empty">Loading...</div>
-      </div>
+        <div id="code-list" class="code-list">
+          <div class="admin-empty">Loading...</div>
+        </div>
 
-      <div id="load-more-row" class="load-more-row hidden">
-        <button id="load-more-btn" class="btn btn-outline btn-sm">Load More</button>
+        <div id="load-more-row" class="load-more-row hidden" style="margin-top: 24px;">
+          <button id="load-more-btn" class="btn btn-outline btn-sm">Load More Results</button>
+        </div>
       </div>
-    </div>
+    </main>
   </div>
 
   <div id="copy-toast" class="copy-toast">Copied!</div>
@@ -455,7 +179,7 @@
       try {
         if (reset) loadedCodes = [];
         const skip = loadedCodes.length;
-        const data = await adminFetch(`/api/admin/codes?skip=${skip}&limit=10`);
+        const data = await adminFetch(`/api/admin/codes?skip=${skip}&limit=10&q=${encodeURIComponent(globalSearchQuery)}`);
         if (!data) return;
         loadedCodes = loadedCodes.concat(data.codes);
         hasMore = data.hasMore;
@@ -750,13 +474,17 @@
         else globalSearchClearBtn.classList.add('hidden');
         
         clearTimeout(globalSearchTimeout);
-        globalSearchTimeout = setTimeout(() => executeGlobalSearch(), 400);
+        globalSearchTimeout = setTimeout(() => {
+          executeGlobalSearch();
+          loadCodes(true);
+        }, 400);
       });
       globalSearchClearBtn.addEventListener('click', () => {
         globalSearchInput.value = '';
         globalSearchQuery = '';
         globalSearchClearBtn.classList.add('hidden');
         globalSearchResults.classList.add('hidden');
+        loadCodes(true);
       });
     }
 
@@ -768,24 +496,31 @@
       try {
         const data = await adminFetch(`/api/admin/users/search?q=${encodeURIComponent(globalSearchQuery)}`);
         if (!data) return;
-        globalSearchResults.classList.remove('hidden');
         
         if (data.length === 0) {
-          globalSearchList.innerHTML = '<div class="admin-empty">No users found.</div>';
+          globalSearchResults.classList.add('hidden');
           return;
         }
 
+        globalSearchResults.classList.remove('hidden');
+
         globalSearchList.innerHTML = data.map(u => {
           let roleColor = u.role === 'owner' ? '#7f5af0' : (u.role === 'staff' ? '#2cb67d' : '#94a1b2');
+          let displayCode = u.verifiedName ? `${esc(u.codeValue)} (${esc(u.verifiedName)})` : esc(u.codeValue);
           return `
-            <div class="user-row" style="border-left: 3px solid ${roleColor};">
-              <div>
-                <span style="color:#e0e0e0; font-weight:600; font-size:0.95rem;">${esc(u.username)}</span>
-                <span style="color:${roleColor}; font-size:0.75rem; margin-left:6px; text-transform:uppercase;">[${u.role}]</span>
+            <div class="user-row" style="border-left: 3px solid ${roleColor}; align-items: center;">
+              <div style="flex:1;">
+                <div style="margin-bottom:4px;">
+                  <span style="color:#e0e0e0; font-weight:600; font-size:0.95rem;">${esc(u.username)}</span>
+                  <span style="color:${roleColor}; font-size:0.75rem; margin-left:6px; text-transform:uppercase;">[${esc(u.role)}]</span>
+                </div>
+                <div style="font-size:0.75rem; color:#94a1b2;">
+                  Code: <strong style="color:#fffffe;">${displayCode}</strong> &bull; 
+                  Creator: <strong style="color:#fffffe;">${esc(u.creator)}</strong>
+                </div>
               </div>
-              <div style="font-size:0.75rem; color:#94a1b2; text-align:right;">
-                <div>Code: <strong style="color:#fffffe;">${esc(u.codeName)}</strong></div>
-                <div style="margin-top:2px;">Creator: <strong style="color:#fffffe;">${esc(u.creator)}</strong></div>
+              <div style="margin-left: 10px;">
+                <button class="btn-temp-login" onclick="generateTempPassword('${u._id}', '${esc(u.username)}')">&#128273; Temp Login</button>
               </div>
             </div>
           `;

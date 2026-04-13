@@ -109,15 +109,26 @@ router.get('/codes', authenticateAdmin, async (req, res) => {
   try {
     const skip = parseInt(req.query.skip) || 0;
     const limit = parseInt(req.query.limit) || 10;
+    const q = req.query.q || '';
+
+    let query = {};
+    if (q) {
+      query = {
+        $or: [
+          { code: { $regex: q, $options: 'i' } },
+          { verifiedName: { $regex: q, $options: 'i' } }
+        ]
+      };
+    }
 
     const [codes, total] = await Promise.all([
-      AuthCode.find({})
+      AuthCode.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate('connectedUser', 'username')
         .lean(),
-      AuthCode.countDocuments(),
+      AuthCode.countDocuments(query),
     ]);
 
     res.json({
@@ -275,8 +286,11 @@ router.get('/users/search', authenticateAdmin, async (req, res) => {
     const { q } = req.query;
     if (!q) return res.json([]);
 
-    const users = await User.find({ username: { $regex: q, $options: 'i' }, role: { $in: ['owner', 'staff', 'customer'] } })
-      .populate('authCode', 'name')
+    const users = await User.find({ 
+      username: { $regex: q, $options: 'i' },
+      role: { $in: ['owner', 'staff', 'customer'] } 
+    })
+      .populate('authCode', 'code verifiedName')
       .populate('parentUser', 'username')
       .limit(50)
       .lean();
@@ -285,7 +299,8 @@ router.get('/users/search', authenticateAdmin, async (req, res) => {
       _id: u._id,
       username: u.username,
       role: u.role,
-      codeName: u.authCode ? u.authCode.name : 'Unknown',
+      codeValue: u.authCode ? u.authCode.code : 'Unknown',
+      verifiedName: u.authCode ? u.authCode.verifiedName : null,
       creator: u.parentUser ? u.parentUser.username : (u.role === 'owner' ? 'Admin / Self' : 'Unknown')
     })));
   } catch (err) {

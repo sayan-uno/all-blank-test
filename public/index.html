@@ -14,8 +14,8 @@
   </div>
 
   <!-- ========== AUTH CARD ========== -->
-  <div id="auth-section" class="container">
-    <div class="card">
+  <div id="auth-section" class="page-wrapper auth-wrapper">
+    <div class="auth-box">
       <div class="card-header">
         <h1 id="card-title">Welcome Back</h1>
         <p id="card-subtitle">Sign in to your account</p>
@@ -81,22 +81,27 @@
   </div>
 
   <!-- ========== DASHBOARD ========== -->
-  <div id="dashboard-section" class="container-wide hidden">
-    <div class="card dashboard-card">
-      <!-- Header -->
-      <div class="dash-header">
-        <div>
-          <h1>CallDrop</h1>
-          <p>Welcome, <span id="dash-username" class="highlight"></span></p>
-        </div>
-        <div class="dash-header-actions">
+  <div id="dashboard-section" class="page-wrapper hidden">
+    <!-- Top Navigation -->
+    <header class="top-nav">
+      <div class="nav-brand">
+        <h1>CallDrop</h1>
+      </div>
+      <div class="nav-user">
+        <p>Welcome, <span id="dash-username" class="highlight"></span></p>
+        <div class="nav-actions">
           <button id="settings-btn" class="icon-btn" title="Settings">&#9881;</button>
-          <button id="logout-btn" class="icon-btn" title="Sign Out">&#9211;</button>
+          <button id="logout-btn" class="icon-btn" title="Sign Out" style="color: #e53170;">&#9211;</button>
         </div>
       </div>
+    </header>
 
-      <!-- Settings Panel (hidden by default) -->
-      <div id="settings-panel" class="settings-panel hidden">
+    <main class="main-content grid-layout">
+      
+      <!-- Left Column / Full -->
+      <div class="column">
+        <!-- Settings Panel (hidden by default) -->
+        <div id="settings-panel" class="content-block hidden" style="margin-bottom: 32px;">
         <h3 class="section-title">Account Settings</h3>
         <div class="info-row">
           <span class="info-label">Username</span>
@@ -123,9 +128,10 @@
           <button type="submit" class="btn btn-secondary btn-sm">Save Recovery Email</button>
         </form>
         <div id="dash-message" class="message hidden"></div>
+        </div>
 
         <!-- ===== STAFF MANAGEMENT (owner only) ===== -->
-        <div id="staff-mgmt-section" class="mgmt-section hidden">
+        <div id="staff-mgmt-section" class="content-block hidden" style="margin-bottom: 32px;">
           <div class="mgmt-header">
             <h3 class="section-title">&#128101; Staff Management <span id="staff-count-badge" style="font-size:0.75rem; color:#94a1b2;"></span></h3>
             <button id="create-staff-btn" class="fab fab-sm" title="Create staff link">&#43;</button>
@@ -178,7 +184,7 @@
         </div>
 
         <!-- ===== CUSTOMER MANAGEMENT (owner + staff) ===== -->
-        <div id="customer-mgmt-section" class="mgmt-section hidden">
+        <div id="customer-mgmt-section" class="content-block hidden" style="margin-bottom: 32px;">
           <div class="mgmt-header">
             <h3 class="section-title">&#128100; Customer Management <span id="customer-count-badge" style="font-size:0.75rem; color:#94a1b2;"></span></h3>
             <button id="create-customer-btn" class="fab fab-sm" title="Create customer link">&#43;</button>
@@ -215,10 +221,12 @@
           </div>
           <button id="load-more-customer-btn" class="btn btn-outline btn-sm load-more-btn hidden">Load More Customers</button>
         </div>
-      </div>
+      </div> <!-- End Column -->
 
-      <!-- Call Links Card -->
-      <div class="dash-card">
+      <!-- Right Column -->
+      <div class="column">
+        <!-- Call Links Card -->
+        <div class="content-block">
         <div class="links-header">
           <h2>Your Call Links <span id="links-count-badge" style="font-size:0.9rem; color:#94a1b2; font-weight:normal; margin-left:8px;"></span></h2>
           <div class="links-header-actions">
@@ -354,7 +362,7 @@
       </div>
 
       <!-- Notifications Card -->
-      <div class="dash-card" id="notifications-card">
+      <div class="content-block" id="notifications-card">
         <div id="missed-calls-section" class="missed-calls-section hidden">
           <div class="missed-calls-header">
             <h3 class="section-title">&#128276; Notifications</h3>
@@ -365,7 +373,7 @@
       </div>
 
       <!-- Call History Card -->
-      <div class="dash-card">
+      <div class="content-block">
         <div id="history-section" class="history-section">
           <div class="history-header">
             <h3 class="section-title">&#128214; Call History</h3>
