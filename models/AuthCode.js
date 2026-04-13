@@ -22,6 +22,10 @@ const authCodeSchema = new mongoose.Schema({
     ref: 'User',
     default: null,
   },
+  allowDelete: {
+    type: Boolean,
+    default: false,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

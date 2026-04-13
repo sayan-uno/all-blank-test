@@ -2,6 +2,8 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const AuthCode = require('../models/AuthCode');
+const StaffLink = require('../models/StaffLink');
+const CustomerLink = require('../models/CustomerLink');
 const { authenticateToken, requireAuthCode } = require('../middleware/auth');
 
 const router = express.Router();
@@ -96,6 +98,32 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'No auth code linked to this account' });
     }
 
+    // Check staff invite link status
+    if (user.role === 'staff') {
+      const staffLink = await StaffLink.findOne({ connectedUser: user._id });
+      if (!staffLink || staffLink.status === 'paused') {
+        return res.status(403).json({ error: 'Your staff access has been paused' });
+      }
+    }
+
+    // Check customer invite link status
+    if (user.role === 'customer') {
+      const customerLink = await CustomerLink.findOne({ connectedUser: user._id });
+      if (!customerLink || customerLink.status === 'paused') {
+        return res.status(403).json({ error: 'Your customer access has been paused' });
+      }
+      // Also check parent staff link
+      if (user.parentUser) {
+        const parentUser = await User.findById(user.parentUser).select('role');
+        if (parentUser && parentUser.role === 'staff') {
+          const parentStaffLink = await StaffLink.findOne({ connectedUser: parentUser._id });
+          if (parentStaffLink && parentStaffLink.status === 'paused') {
+            return res.status(403).json({ error: 'Service paused' });
+          }
+        }
+      }
+    }
+
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: '7d',
     });
@@ -118,7 +146,29 @@ router.get('/me', authenticateToken, requireAuthCode, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('-password');
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ username: user.username, email: user.email, createdAt: user.createdAt });
+
+    // Determine if user has verified name access
+    let hasVerifiedName = false;
+    let canDelete = false;
+
+    const ac = user.authCode ? await AuthCode.findById(user.authCode).lean() : null;
+
+    if (user.role === 'owner') {
+      if (ac && ac.verifiedName) hasVerifiedName = true;
+      if (ac && ac.allowDelete) canDelete = true;
+    } else if (user.role === 'staff') {
+      const staffLink = await StaffLink.findOne({ connectedUser: user._id });
+      if (staffLink && staffLink.showVerifiedName && ac && ac.verifiedName) {
+        hasVerifiedName = true;
+      }
+      // Staff can delete only if auth code allows AND owner allowed it on the staff link
+      if (ac && ac.allowDelete && staffLink && staffLink.allowDelete) {
+        canDelete = true;
+      }
+    }
+    // Customers never get verified name or delete permission
+
+    res.json({ username: user.username, email: user.email, role: user.role, hasVerifiedName, canDelete, createdAt: user.createdAt });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -127,6 +177,12 @@ router.get('/me', authenticateToken, requireAuthCode, async (req, res) => {
 // Add / update recovery email
 router.put('/email', authenticateToken, requireAuthCode, async (req, res) => {
   try {
+    // Staff and customer cannot change email
+    const user = await User.findById(req.userId).select('role');
+    if (user && (user.role === 'staff' || user.role === 'customer')) {
+      return res.status(403).json({ error: 'Email changes are not available for your account type' });
+    }
+
     const { email } = req.body;
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: 'Valid email is required' });

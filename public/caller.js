@@ -35,6 +35,11 @@ async function init() {
     if (!res.ok) return showError('Link Not Found', 'This call link is invalid or has been removed.');
     linkInfo = await res.json();
 
+    // Check if service is suspended
+    if (linkInfo.suspended) {
+      return showError('Service Suspended', linkInfo.suspendedMessage || 'Service suspended for this user.');
+    }
+
     // Check if link is expired
     if (linkInfo.expired) {
       return showError('Link Expired', 'This call link has expired and is no longer active.');
@@ -46,14 +51,28 @@ async function init() {
     }
 
     // Show pre-call screen with owner info
-    document.getElementById('precall-avatar-letter').textContent = linkInfo.ownerUsername[0].toUpperCase();
-    document.getElementById('precall-owner-name').textContent = linkInfo.ownerUsername;
+    const avatarLetter = linkInfo.ownerUsername
+      ? linkInfo.ownerUsername[0].toUpperCase()
+      : (linkInfo.verifiedName ? linkInfo.verifiedName[0].toUpperCase() : '?');
+    document.getElementById('precall-avatar-letter').textContent = avatarLetter;
+
+    // If username is hidden, show verified name as the main name
+    if (linkInfo.ownerUsername) {
+      document.getElementById('precall-owner-name').textContent = linkInfo.ownerUsername;
+    } else if (linkInfo.verifiedName) {
+      document.getElementById('precall-owner-name').textContent = linkInfo.verifiedName;
+    } else {
+      document.getElementById('precall-owner-name').textContent = 'Verified Account';
+    }
     document.getElementById('precall-link-name').textContent = linkInfo.name;
 
-    // Show verified name with blue tick if present
+    // Show verified name with blue tick if present (below username)
     if (linkInfo.verifiedName) {
       document.getElementById('precall-verified-name').textContent = linkInfo.verifiedName;
-      document.getElementById('precall-verified-row').classList.remove('hidden');
+      // Only show the separate verified row if username is NOT hidden (avoid duplication)
+      if (linkInfo.ownerUsername) {
+        document.getElementById('precall-verified-row').classList.remove('hidden');
+      }
     }
 
     // Show chat button if chat is enabled

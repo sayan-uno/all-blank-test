@@ -61,6 +61,11 @@ const callLinkSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // If true, the owner's username is hidden from visitors (only verified name shown)
+  hideUsername: {
+    type: Boolean,
+    default: false,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

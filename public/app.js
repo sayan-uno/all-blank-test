@@ -131,6 +131,61 @@ async function loadDashboard() {
   document.getElementById('info-email').textContent    = data.email || 'Not set';
   document.getElementById('info-date').textContent     = new Date(data.createdAt).toLocaleDateString();
 
+  // Show role
+  const roleEl = document.getElementById('info-role');
+  roleEl.textContent = data.role || 'owner';
+
+  // Role-based UI
+  const role = data.role || 'owner';
+
+  // Hide email form for staff/customer
+  if (role === 'staff' || role === 'customer') {
+    document.getElementById('email-form').style.display = 'none';
+    document.getElementById('email-row').style.display = 'none';
+  }
+
+  // Show staff management for owner
+  if (role === 'owner') {
+    document.getElementById('staff-mgmt-section').classList.remove('hidden');
+    loadStaffLinks();
+  }
+
+  // Show customer management for owner and staff
+  if (role === 'owner' || role === 'staff') {
+    document.getElementById('customer-mgmt-section').classList.remove('hidden');
+    loadCustomerLinks();
+  }
+
+  // Show verified-name toggle in staff creation form (if owner has verified name)
+  if (data.hasVerifiedName && role === 'owner') {
+    document.getElementById('staff-verified-toggle').classList.remove('hidden');
+  }
+
+  // Show hide-username toggle in create link form (if user has verified name)
+  if (data.hasVerifiedName) {
+    document.getElementById('hide-username-toggle').classList.remove('hidden');
+  }
+
+  // Show delete toggle in staff creation form (if owner has delete permission)
+  if (data.canDelete && role === 'owner') {
+    document.getElementById('staff-delete-toggle').classList.remove('hidden');
+  }
+
+  // Hide delete-related UI if user doesn't have delete permission
+  if (!data.canDelete) {
+    // Hide clear history button
+    const clearHistBtn = document.getElementById('clear-history-btn');
+    if (clearHistBtn) clearHistBtn.classList.add('hidden');
+    // Hide clear chat button
+    const chatClearBtn = document.getElementById('owner-chat-clear-btn');
+    if (chatClearBtn) chatClearBtn.classList.add('hidden');
+  }
+
+  // For customer role, hide the add link button after 1 link
+  if (role === 'customer') {
+    // We'll check after loading links
+  }
+
   authSection.classList.add('hidden');
   callScreen.classList.add('hidden');
   dashSection.classList.remove('hidden');
@@ -273,6 +328,12 @@ createLinkForm.addEventListener('submit', async e => {
   body.chatEnabled = document.getElementById('enable-chat').checked;
   body.chatSeenEnabled = document.getElementById('enable-chat-seen').checked;
 
+  // Hide username toggle
+  const hideUsernameToggle = document.getElementById('enable-hide-username');
+  if (hideUsernameToggle && !hideUsernameToggle.closest('.hidden')) {
+    body.hideUsername = hideUsernameToggle.checked;
+  }
+
   if (!body.callEnabled && !body.chatEnabled) {
     return showMsg(dashMessage, 'Enable at least calling or chat', 'error');
   }
@@ -302,6 +363,14 @@ async function loadLinks() {
   // Clear search on fresh load
   document.getElementById('link-search-input').value = '';
   document.getElementById('search-clear-btn').classList.add('hidden');
+
+  // Hide add button for customers who already have a link
+  if (currentUser && currentUser.role === 'customer' && data.length >= 1) {
+    addLinkBtn.classList.add('hidden');
+  } else {
+    addLinkBtn.classList.remove('hidden');
+  }
+
   applyLinksView();
 }
 
@@ -381,6 +450,10 @@ function renderLinks(data) {
       badges += `<span class="link-badge expired-badge">&#128222; Call off</span>`;
     }
 
+    const deleteBtn = currentUser && currentUser.canDelete
+      ? `<button class="link-action-btn delete-btn" title="Delete" onclick="deleteLink('${link.linkId}')">&#128465;</button>`
+      : '';
+
     return `
       <div class="link-card" data-link-id="${link.linkId}">
         <div class="link-card-info">
@@ -392,7 +465,7 @@ function renderLinks(data) {
           <button class="link-action-btn copy-btn" title="Copy link" onclick="copyLink('${url}')">&#128203;</button>
           <button class="link-action-btn edit-btn" title="Edit" onclick="editLink('${link.linkId}')">&#9998;</button>
           <button class="link-action-btn reset-btn" title="Reset link" onclick="resetLink('${link.linkId}')">&#8635;</button>
-          <button class="link-action-btn delete-btn" title="Delete" onclick="deleteLink('${link.linkId}')">&#128465;</button>
+          ${deleteBtn}
         </div>
       </div>
     `;
@@ -1236,6 +1309,218 @@ function ownerShowTyping() {
     ownerChatTypingEl.classList.add('hidden');
   }, 2000);
 }
+
+// ========== STAFF MANAGEMENT ==========
+const createStaffBtn = document.getElementById('create-staff-btn');
+const createStaffPanel = document.getElementById('create-staff-panel');
+const createStaffForm = document.getElementById('create-staff-form');
+const cancelStaffBtn = document.getElementById('cancel-staff-btn');
+const staffLinksList = document.getElementById('staff-links-list');
+
+if (createStaffBtn) {
+  createStaffBtn.addEventListener('click', () => {
+    createStaffPanel.classList.toggle('hidden');
+    createStaffForm.reset();
+  });
+}
+
+if (cancelStaffBtn) {
+  cancelStaffBtn.addEventListener('click', () => {
+    createStaffPanel.classList.add('hidden');
+    createStaffForm.reset();
+  });
+}
+
+if (createStaffForm) {
+  createStaffForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('staff-username-input').value.trim();
+    const secretCode = document.getElementById('staff-code-input').value;
+    const showVerifiedName = document.getElementById('staff-show-verified').checked;
+    const allowDelete = document.getElementById('staff-allow-delete').checked;
+
+    const { ok, data } = await api('/api/staff', 'POST', { username, secretCode, showVerifiedName, allowDelete });
+    if (ok) {
+      createStaffPanel.classList.add('hidden');
+      createStaffForm.reset();
+      showMsg(dashMessage, 'Staff link created!', 'success');
+      loadStaffLinks();
+    } else {
+      showMsg(dashMessage, data.error, 'error');
+    }
+  });
+}
+
+async function loadStaffLinks() {
+  const { ok, data } = await api('/api/staff');
+  if (!ok) return;
+  renderStaffLinks(data);
+}
+
+function renderStaffLinks(links) {
+  if (!links || links.length === 0) {
+    staffLinksList.innerHTML = '<p class="empty-state">No staff links yet.</p>';
+    return;
+  }
+
+  staffLinksList.innerHTML = links.map(link => {
+    const joinUrl = `${location.origin}/join/staff/${link.linkId}`;
+    const statusClass = link.connectedUser ? 'joined' : link.status;
+    const statusLabel = link.connectedUser ? `Joined: ${link.connectedUser}` : link.status;
+
+    const pauseBtn = link.status === 'active'
+      ? `<button class="mgmt-action-btn pause-btn" onclick="staffAction('${link.linkId}', 'pause')">⏸ Pause</button>`
+      : `<button class="mgmt-action-btn resume-btn" onclick="staffAction('${link.linkId}', 'resume')">▶ Resume</button>`;
+
+    const verifiedBadge = link.showVerifiedName
+      ? '<span class="mgmt-link-status joined" style="margin-left:6px;">✅ Verified</span>'
+      : '';
+
+    const deleteBadge = link.allowDelete
+      ? '<span class="mgmt-link-status joined" style="margin-left:6px;">🔐 Delete</span>'
+      : '';
+
+    return `
+      <div class="mgmt-link-card">
+        <div class="mgmt-link-top">
+          <span class="mgmt-link-username">&#128100; ${escapeHtml(link.username)} ${verifiedBadge} ${deleteBadge}</span>
+          <span class="mgmt-link-status ${statusClass}">${statusLabel}</span>
+        </div>
+        <div class="mgmt-link-details">
+          <span class="mgmt-link-detail"><strong>Code:</strong> ${escapeHtml(link.secretCode)}</span>
+          <span class="mgmt-link-url">${joinUrl}</span>
+        </div>
+        <div class="mgmt-link-actions">
+          <button class="mgmt-action-btn copy-btn" onclick="copyStaffLink('${joinUrl}')">&#128203; Copy Link</button>
+          ${pauseBtn}
+          <button class="mgmt-action-btn delete-btn" onclick="staffAction('${link.linkId}', 'delete')">&#128465; Delete</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.copyStaffLink = async function(url) {
+  try { await navigator.clipboard.writeText(url); showMsg(dashMessage, 'Staff link copied!', 'success'); }
+  catch { showMsg(dashMessage, 'Failed to copy', 'error'); }
+};
+
+window.staffAction = async function(linkId, action) {
+  if (action === 'pause') {
+    const { ok, data } = await api(`/api/staff/${linkId}/status`, 'PUT', { status: 'paused' });
+    if (ok) { showMsg(dashMessage, 'Staff paused', 'success'); loadStaffLinks(); }
+    else showMsg(dashMessage, data.error, 'error');
+  } else if (action === 'resume') {
+    const { ok, data } = await api(`/api/staff/${linkId}/status`, 'PUT', { status: 'active' });
+    if (ok) { showMsg(dashMessage, 'Staff resumed', 'success'); loadStaffLinks(); }
+    else showMsg(dashMessage, data.error, 'error');
+  } else if (action === 'delete') {
+    const { ok, data } = await api(`/api/staff/${linkId}`, 'DELETE');
+    if (ok) { showMsg(dashMessage, 'Staff deleted', 'success'); loadStaffLinks(); }
+    else showMsg(dashMessage, data.error, 'error');
+  }
+};
+
+// ========== CUSTOMER MANAGEMENT ==========
+const createCustomerBtn = document.getElementById('create-customer-btn');
+const createCustomerPanel = document.getElementById('create-customer-panel');
+const createCustomerForm = document.getElementById('create-customer-form');
+const cancelCustomerBtn = document.getElementById('cancel-customer-btn');
+const customerLinksList = document.getElementById('customer-links-list');
+
+if (createCustomerBtn) {
+  createCustomerBtn.addEventListener('click', () => {
+    createCustomerPanel.classList.toggle('hidden');
+    createCustomerForm.reset();
+  });
+}
+
+if (cancelCustomerBtn) {
+  cancelCustomerBtn.addEventListener('click', () => {
+    createCustomerPanel.classList.add('hidden');
+    createCustomerForm.reset();
+  });
+}
+
+if (createCustomerForm) {
+  createCustomerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('customer-username-input').value.trim();
+    const secretCode = document.getElementById('customer-code-input').value;
+
+    const { ok, data } = await api('/api/customer', 'POST', { username, secretCode });
+    if (ok) {
+      createCustomerPanel.classList.add('hidden');
+      createCustomerForm.reset();
+      showMsg(dashMessage, 'Customer link created!', 'success');
+      loadCustomerLinks();
+    } else {
+      showMsg(dashMessage, data.error, 'error');
+    }
+  });
+}
+
+async function loadCustomerLinks() {
+  const { ok, data } = await api('/api/customer');
+  if (!ok) return;
+  renderCustomerLinks(data);
+}
+
+function renderCustomerLinks(links) {
+  if (!links || links.length === 0) {
+    customerLinksList.innerHTML = '<p class="empty-state">No customer links yet.</p>';
+    return;
+  }
+
+  customerLinksList.innerHTML = links.map(link => {
+    const joinUrl = `${location.origin}/join/customer/${link.linkId}`;
+    const statusClass = link.connectedUser ? 'joined' : link.status;
+    const statusLabel = link.connectedUser ? `Joined: ${link.connectedUser}` : link.status;
+
+    const pauseBtn = link.status === 'active'
+      ? `<button class="mgmt-action-btn pause-btn" onclick="customerAction('${link.linkId}', 'pause')">⏸ Pause</button>`
+      : `<button class="mgmt-action-btn resume-btn" onclick="customerAction('${link.linkId}', 'resume')">▶ Resume</button>`;
+
+    return `
+      <div class="mgmt-link-card">
+        <div class="mgmt-link-top">
+          <span class="mgmt-link-username">&#128100; ${escapeHtml(link.username)}</span>
+          <span class="mgmt-link-status ${statusClass}">${statusLabel}</span>
+        </div>
+        <div class="mgmt-link-details">
+          <span class="mgmt-link-detail"><strong>Code:</strong> ${escapeHtml(link.secretCode)}</span>
+          <span class="mgmt-link-url">${joinUrl}</span>
+        </div>
+        <div class="mgmt-link-actions">
+          <button class="mgmt-action-btn copy-btn" onclick="copyCustomerLink('${joinUrl}')">&#128203; Copy Link</button>
+          ${pauseBtn}
+          <button class="mgmt-action-btn delete-btn" onclick="customerAction('${link.linkId}', 'delete')">&#128465; Delete</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.copyCustomerLink = async function(url) {
+  try { await navigator.clipboard.writeText(url); showMsg(dashMessage, 'Customer link copied!', 'success'); }
+  catch { showMsg(dashMessage, 'Failed to copy', 'error'); }
+};
+
+window.customerAction = async function(linkId, action) {
+  if (action === 'pause') {
+    const { ok, data } = await api(`/api/customer/${linkId}/status`, 'PUT', { status: 'paused' });
+    if (ok) { showMsg(dashMessage, 'Customer paused', 'success'); loadCustomerLinks(); }
+    else showMsg(dashMessage, data.error, 'error');
+  } else if (action === 'resume') {
+    const { ok, data } = await api(`/api/customer/${linkId}/status`, 'PUT', { status: 'active' });
+    if (ok) { showMsg(dashMessage, 'Customer resumed', 'success'); loadCustomerLinks(); }
+    else showMsg(dashMessage, data.error, 'error');
+  } else if (action === 'delete') {
+    const { ok, data } = await api(`/api/customer/${linkId}`, 'DELETE');
+    if (ok) { showMsg(dashMessage, 'Customer deleted', 'success'); loadCustomerLinks(); }
+    else showMsg(dashMessage, data.error, 'error');
+  }
+};
 
 // ===== Check Auth on Load =====
 (async () => {

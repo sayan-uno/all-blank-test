@@ -4,6 +4,9 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const ChatMessage = require('../models/ChatMessage');
 const CallLink = require('../models/CallLink');
+const User = require('../models/User');
+const AuthCode = require('../models/AuthCode');
+const StaffLink = require('../models/StaffLink');
 const { authenticateToken, requireAuthCode } = require('../middleware/auth');
 
 const router = express.Router();
@@ -58,11 +61,24 @@ router.get('/:linkId/messages', async (req, res) => {
   }
 });
 
-// Clear chat (owner only)
+// Clear chat (owner only, requires delete permission)
 router.delete('/:linkId/clear', authenticateToken, requireAuthCode, async (req, res) => {
   try {
     const link = await CallLink.findOne({ linkId: req.params.linkId, owner: req.userId });
     if (!link) return res.status(404).json({ error: 'Link not found' });
+
+    // Check delete permission
+    const currentUser = await User.findById(req.userId).select('role authCode');
+    const ac = currentUser.authCode ? await AuthCode.findById(currentUser.authCode).lean() : null;
+    let canDelete = false;
+    if (currentUser.role === 'owner' && ac && ac.allowDelete) canDelete = true;
+    if (currentUser.role === 'staff' && ac && ac.allowDelete) {
+      const sl = await StaffLink.findOne({ connectedUser: req.userId });
+      if (sl && sl.allowDelete) canDelete = true;
+    }
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Delete permission not granted for your account' });
+    }
 
     await ChatMessage.deleteMany({ linkId: req.params.linkId });
     res.json({ message: 'Chat cleared' });

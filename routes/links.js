@@ -4,6 +4,9 @@ const CallLink = require('../models/CallLink');
 const CallHistory = require('../models/CallHistory');
 const ChatMessage = require('../models/ChatMessage');
 const AuthCode = require('../models/AuthCode');
+const User = require('../models/User');
+const StaffLink = require('../models/StaffLink');
+const CustomerLink = require('../models/CustomerLink');
 const { authenticateToken, requireAuthCode } = require('../middleware/auth');
 
 const router = express.Router();
@@ -72,7 +75,16 @@ function formatScheduleMessage(schedule, timezone) {
 // Create a new call link
 router.post('/', authenticateToken, requireAuthCode, async (req, res) => {
   try {
-    const { name, schedule, expiresAt, fallbackMessage, timezone, callEnabled, chatEnabled, chatSeenEnabled } = req.body;
+    // Enforce max 1 link for customer role
+    const currentUser = await User.findById(req.userId).select('role');
+    if (currentUser && currentUser.role === 'customer') {
+      const existingCount = await CallLink.countDocuments({ owner: req.userId });
+      if (existingCount >= 1) {
+        return res.status(403).json({ error: 'Customer accounts can only create 1 link' });
+      }
+    }
+
+    const { name, schedule, expiresAt, fallbackMessage, timezone, callEnabled, chatEnabled, chatSeenEnabled, hideUsername } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Link name is required' });
     }
@@ -124,6 +136,24 @@ router.post('/', authenticateToken, requireAuthCode, async (req, res) => {
       linkData.chatSeenEnabled = !!chatSeenEnabled;
     }
 
+    // Handle hideUsername — only allowed if user has verified name
+    if (hideUsername) {
+      let hasVerified = false;
+      if (currentUser.role === 'owner' && currentUser.authCode) {
+        const ac = await AuthCode.findById(currentUser.authCode).lean();
+        if (ac && ac.verifiedName) hasVerified = true;
+      } else if (currentUser.role === 'staff') {
+        const sl = await StaffLink.findOne({ connectedUser: req.userId });
+        if (sl && sl.showVerifiedName && currentUser.authCode) {
+          const ac = await AuthCode.findById(currentUser.authCode).lean();
+          if (ac && ac.verifiedName) hasVerified = true;
+        }
+      }
+      if (hasVerified) {
+        linkData.hideUsername = true;
+      }
+    }
+
     const link = new CallLink(linkData);
     await link.save();
 
@@ -137,6 +167,7 @@ router.post('/', authenticateToken, requireAuthCode, async (req, res) => {
       callEnabled: link.callEnabled !== false,
       chatEnabled: link.chatEnabled,
       chatSeenEnabled: link.chatSeenEnabled,
+      hideUsername: !!link.hideUsername,
       createdAt: link.createdAt,
     });
   } catch (err) {
@@ -159,6 +190,7 @@ router.get('/', authenticateToken, requireAuthCode, async (req, res) => {
       callEnabled: l.callEnabled !== false,
       chatEnabled: l.chatEnabled,
       chatSeenEnabled: l.chatSeenEnabled,
+      hideUsername: !!l.hideUsername,
       createdAt: l.createdAt,
     })));
   } catch (err) {
@@ -187,7 +219,7 @@ router.put('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
     const link = await CallLink.findOne({ linkId: req.params.linkId, owner: req.userId });
     if (!link) return res.status(404).json({ error: 'Link not found' });
 
-    const { name, schedule, expiresAt, fallbackMessage, timezone, callEnabled, chatEnabled, chatSeenEnabled } = req.body;
+    const { name, schedule, expiresAt, fallbackMessage, timezone, callEnabled, chatEnabled, chatSeenEnabled, hideUsername } = req.body;
 
     if (name !== undefined) {
       if (!name || !name.trim()) return res.status(400).json({ error: 'Link name is required' });
@@ -245,6 +277,27 @@ router.put('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
       return res.status(400).json({ error: 'Enable at least calling or chat' });
     }
 
+    // Handle hideUsername toggle
+    if (hideUsername !== undefined) {
+      if (hideUsername) {
+        const currentUser = await User.findById(req.userId).select('role authCode');
+        let hasVerified = false;
+        if (currentUser.role === 'owner' && currentUser.authCode) {
+          const ac = await AuthCode.findById(currentUser.authCode).lean();
+          if (ac && ac.verifiedName) hasVerified = true;
+        } else if (currentUser.role === 'staff') {
+          const sl = await StaffLink.findOne({ connectedUser: req.userId });
+          if (sl && sl.showVerifiedName && currentUser.authCode) {
+            const ac = await AuthCode.findById(currentUser.authCode).lean();
+            if (ac && ac.verifiedName) hasVerified = true;
+          }
+        }
+        link.hideUsername = hasVerified;
+      } else {
+        link.hideUsername = false;
+      }
+    }
+
     await link.save();
 
     res.json({
@@ -257,6 +310,7 @@ router.put('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
       callEnabled: link.callEnabled !== false,
       chatEnabled: link.chatEnabled,
       chatSeenEnabled: link.chatSeenEnabled,
+      hideUsername: !!link.hideUsername,
       createdAt: link.createdAt,
     });
   } catch (err) {
@@ -268,6 +322,20 @@ router.put('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
 // Delete a link
 router.delete('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
   try {
+    // Check delete permission
+    const currentUser = await User.findById(req.userId).select('role authCode');
+    const ac = currentUser.authCode ? await AuthCode.findById(currentUser.authCode).lean() : null;
+    let canDelete = false;
+    if (currentUser.role === 'owner' && ac && ac.allowDelete) canDelete = true;
+    if (currentUser.role === 'staff' && ac && ac.allowDelete) {
+      const sl = await StaffLink.findOne({ connectedUser: req.userId });
+      if (sl && sl.allowDelete) canDelete = true;
+    }
+    // Customer can never delete
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Delete permission not granted for your account' });
+    }
+
     const link = await CallLink.findOneAndDelete({ linkId: req.params.linkId, owner: req.userId });
     if (!link) return res.status(404).json({ error: 'Link not found' });
     // Cascade delete chat messages for this link
@@ -293,6 +361,19 @@ router.get('/history/list', authenticateToken, requireAuthCode, async (req, res)
 // Clear call history
 router.delete('/history/clear', authenticateToken, requireAuthCode, async (req, res) => {
   try {
+    // Check delete permission
+    const currentUser = await User.findById(req.userId).select('role authCode');
+    const ac = currentUser.authCode ? await AuthCode.findById(currentUser.authCode).lean() : null;
+    let canDelete = false;
+    if (currentUser.role === 'owner' && ac && ac.allowDelete) canDelete = true;
+    if (currentUser.role === 'staff' && ac && ac.allowDelete) {
+      const sl = await StaffLink.findOne({ connectedUser: req.userId });
+      if (sl && sl.allowDelete) canDelete = true;
+    }
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Delete permission not granted for your account' });
+    }
+
     await CallHistory.deleteMany({ owner: req.userId });
     res.json({ message: 'History cleared' });
   } catch (err) {
@@ -303,15 +384,66 @@ router.delete('/history/clear', authenticateToken, requireAuthCode, async (req, 
 // Public: get link info (for caller page) — includes availability check
 router.get('/:linkId/info', async (req, res) => {
   try {
-    const link = await CallLink.findOne({ linkId: req.params.linkId }).populate('owner', 'username authCode');
+    const link = await CallLink.findOne({ linkId: req.params.linkId }).populate('owner', 'username authCode role');
     if (!link) return res.status(404).json({ error: 'Link not found' });
 
-    // Look up verified name from the owner's auth code
-    let verifiedName = null;
+    // Check if the link owner's auth code is blocked
     if (link.owner.authCode) {
       const ac = await AuthCode.findById(link.owner.authCode).lean();
-      if (ac && ac.verifiedName) verifiedName = ac.verifiedName;
+      if (!ac || ac.status === 'blocked') {
+        return res.json({
+          linkId: link.linkId,
+          name: link.name,
+          suspended: true,
+          suspendedMessage: 'Service suspended for this user',
+        });
+      }
     }
+
+    // Check if the owner is a staff/customer with a paused invite link
+    if (link.owner.role === 'staff') {
+      const staffLink = await StaffLink.findOne({ connectedUser: link.owner._id });
+      if (staffLink && staffLink.status === 'paused') {
+        return res.json({
+          linkId: link.linkId,
+          name: link.name,
+          suspended: true,
+          suspendedMessage: 'Service suspended for this user',
+        });
+      }
+    }
+    if (link.owner.role === 'customer') {
+      const customerLink = await CustomerLink.findOne({ connectedUser: link.owner._id });
+      if (customerLink && customerLink.status === 'paused') {
+        return res.json({
+          linkId: link.linkId,
+          name: link.name,
+          suspended: true,
+          suspendedMessage: 'Service suspended for this user',
+        });
+      }
+    }
+
+    // Look up verified name — depends on the owner's role
+    let verifiedName = null;
+    if (link.owner.role === 'owner') {
+      // Owner always gets their auth code's verified name
+      if (link.owner.authCode) {
+        const ac = await AuthCode.findById(link.owner.authCode).lean();
+        if (ac && ac.verifiedName) verifiedName = ac.verifiedName;
+      }
+    } else if (link.owner.role === 'staff') {
+      // Staff only gets verified name if the owner enabled it on the staff link
+      const staffLink = await StaffLink.findOne({ connectedUser: link.owner._id });
+      if (staffLink && staffLink.showVerifiedName && link.owner.authCode) {
+        const ac = await AuthCode.findById(link.owner.authCode).lean();
+        if (ac && ac.verifiedName) verifiedName = ac.verifiedName;
+      }
+    }
+    // Customer links NEVER show verified name
+
+    // Determine if username should be shown
+    const ownerUsername = link.hideUsername && verifiedName ? null : link.owner.username;
 
     // Check expiry
     if (link.expiresAt && new Date() > link.expiresAt) {
@@ -325,8 +457,9 @@ router.get('/:linkId/info', async (req, res) => {
       return res.json({
         linkId: link.linkId,
         name: link.name,
-        ownerUsername: link.owner.username,
+        ownerUsername,
         verifiedName,
+        hideUsername: !!link.hideUsername,
         expired: true,
       });
     }
@@ -347,8 +480,9 @@ router.get('/:linkId/info', async (req, res) => {
     res.json({
       linkId: link.linkId,
       name: link.name,
-      ownerUsername: link.owner.username,
+      ownerUsername,
       verifiedName,
+      hideUsername: !!link.hideUsername,
       expired: false,
       available: scheduleCheck.available,
       unavailableReason: scheduleCheck.reason || null,

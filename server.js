@@ -1,4 +1,6 @@
 require('dotenv').config();
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 const express = require('express');
 const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
@@ -10,11 +12,15 @@ const authRoutes = require('./routes/auth');
 const linkRoutes = require('./routes/links');
 const chatRoutes = require('./routes/chat');
 const adminRoutes = require('./routes/admin');
+const staffRoutes = require('./routes/staff');
+const customerRoutes = require('./routes/customer');
 const CallLink = require('./models/CallLink');
 const CallHistory = require('./models/CallHistory');
 const ChatMessage = require('./models/ChatMessage');
 const AuthCode = require('./models/AuthCode');
 const User = require('./models/User');
+const StaffLink = require('./models/StaffLink');
+const CustomerLink = require('./models/CustomerLink');
 
 const app = express();
 const server = http.createServer(app);
@@ -37,6 +43,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/links', linkRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/staff', staffRoutes);
+app.use('/api/customer', customerRoutes);
 
 // Serve admin page — URL secret acts as the first gate
 app.get('/admin-panel/:urlSecret', (req, res) => {
@@ -49,6 +57,16 @@ app.get('/admin-panel/:urlSecret', (req, res) => {
 // Serve caller page for /call/:linkId
 app.get('/call/:linkId', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'call.html'));
+});
+
+// Serve staff join page
+app.get('/join/staff/:linkId', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'staff-join.html'));
+});
+
+// Serve customer join page
+app.get('/join/customer/:linkId', (_req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'customer-join.html'));
 });
 
 // Serve frontend (catch-all)

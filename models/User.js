@@ -21,6 +21,16 @@ const userSchema = new mongoose.Schema({
     trim: true,
     lowercase: true,
   },
+  role: {
+    type: String,
+    enum: ['owner', 'staff', 'customer'],
+    default: 'owner',
+  },
+  parentUser: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
   authCode: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'AuthCode',

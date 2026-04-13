@@ -102,14 +102,19 @@
           <span class="info-label">Username</span>
           <span id="info-username" class="info-value"></span>
         </div>
-        <div class="info-row">
+        <div id="email-row" class="info-row">
           <span class="info-label">Recovery Email</span>
           <span id="info-email" class="info-value">Not set</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Account Type</span>
+          <span id="info-role" class="info-value role-badge"></span>
         </div>
         <div class="info-row">
           <span class="info-label">Member Since</span>
           <span id="info-date" class="info-value"></span>
         </div>
+        <!-- Email form (hidden for staff/customer) -->
         <form id="email-form" class="form active" style="margin-top: 12px;">
           <div class="input-group">
             <span class="input-icon">&#9993;</span>
@@ -118,6 +123,82 @@
           <button type="submit" class="btn btn-secondary btn-sm">Save Recovery Email</button>
         </form>
         <div id="dash-message" class="message hidden"></div>
+
+        <!-- ===== STAFF MANAGEMENT (owner only) ===== -->
+        <div id="staff-mgmt-section" class="mgmt-section hidden">
+          <div class="mgmt-header">
+            <h3 class="section-title">&#128101; Staff Management</h3>
+            <button id="create-staff-btn" class="fab fab-sm" title="Create staff link">&#43;</button>
+          </div>
+
+          <!-- Create Staff Form (hidden) -->
+          <div id="create-staff-panel" class="create-link-panel hidden">
+            <form id="create-staff-form" class="form active">
+              <h3 class="form-panel-title">Create Staff Link</h3>
+              <div class="input-group">
+                <span class="input-icon">&#128100;</span>
+                <input type="text" id="staff-username-input" placeholder="Username for this staff" minlength="3" maxlength="30" required />
+              </div>
+              <div class="input-group">
+                <span class="input-icon">&#128273;</span>
+                <input type="text" id="staff-code-input" placeholder="Secret code (min 4 chars)" minlength="4" required />
+              </div>
+              <!-- Share verified name toggle (only shown if owner has verified name) -->
+              <div id="staff-verified-toggle" class="schedule-toggle hidden">
+                <label class="toggle-label">
+                  <input type="checkbox" id="staff-show-verified" />
+                  <span>&#9989; Share verified name with this staff</span>
+                </label>
+              </div>
+              <!-- Allow delete toggle (only shown if owner has delete permission) -->
+              <div id="staff-delete-toggle" class="schedule-toggle hidden">
+                <label class="toggle-label">
+                  <input type="checkbox" id="staff-allow-delete" />
+                  <span>&#128274; Allow delete permission for this staff</span>
+                </label>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-sm">Create Staff</button>
+                <button type="button" id="cancel-staff-btn" class="btn btn-outline btn-sm">Cancel</button>
+              </div>
+            </form>
+          </div>
+
+          <div id="staff-links-list" class="mgmt-list">
+            <p class="empty-state">No staff links yet.</p>
+          </div>
+        </div>
+
+        <!-- ===== CUSTOMER MANAGEMENT (owner + staff) ===== -->
+        <div id="customer-mgmt-section" class="mgmt-section hidden">
+          <div class="mgmt-header">
+            <h3 class="section-title">&#128100; Customer Management</h3>
+            <button id="create-customer-btn" class="fab fab-sm" title="Create customer link">&#43;</button>
+          </div>
+
+          <!-- Create Customer Form (hidden) -->
+          <div id="create-customer-panel" class="create-link-panel hidden">
+            <form id="create-customer-form" class="form active">
+              <h3 class="form-panel-title">Create Customer Link</h3>
+              <div class="input-group">
+                <span class="input-icon">&#128100;</span>
+                <input type="text" id="customer-username-input" placeholder="Username for this customer" minlength="3" maxlength="30" required />
+              </div>
+              <div class="input-group">
+                <span class="input-icon">&#128273;</span>
+                <input type="text" id="customer-code-input" placeholder="Secret code (min 4 chars)" minlength="4" required />
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-sm">Create Customer</button>
+                <button type="button" id="cancel-customer-btn" class="btn btn-outline btn-sm">Cancel</button>
+              </div>
+            </form>
+          </div>
+
+          <div id="customer-links-list" class="mgmt-list">
+            <p class="empty-state">No customer links yet.</p>
+          </div>
+        </div>
       </div>
 
       <!-- Call Links Card -->
@@ -237,6 +318,14 @@
               <label class="toggle-label">
                 <input type="checkbox" id="enable-chat-seen" />
                 <span>Let visitors see read receipts</span>
+              </label>
+            </div>
+
+            <!-- Hide Username Toggle (only shown if user has verified name) -->
+            <div id="hide-username-toggle" class="schedule-toggle hidden">
+              <label class="toggle-label">
+                <input type="checkbox" id="enable-hide-username" />
+                <span>&#128065; Hide username (show only verified name)</span>
               </label>
             </div>
 

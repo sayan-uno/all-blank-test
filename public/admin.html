@@ -215,6 +215,25 @@
     .btn-name:hover {
       background: rgba(127,90,240,0.35);
     }
+    .delete-auth-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: rgba(224,224,224,0.6);
+      cursor: pointer;
+    }
+    .delete-auth-toggle input {
+      accent-color: #7f5af0;
+    }
+    .badge-delete {
+      background: rgba(255,165,0,0.2);
+      color: #ffa500;
+    }
+    .badge-no-delete {
+      background: rgba(224,224,224,0.08);
+      color: rgba(224,224,224,0.35);
+    }
   </style>
 </head>
 <body>
@@ -254,6 +273,10 @@
       <div class="generate-row">
         <div class="generate-form">
           <input type="text" id="generate-name-input" placeholder="Verified name (optional)" />
+          <label class="delete-auth-toggle">
+            <input type="checkbox" id="generate-allow-delete" />
+            <span>&#128274; Allow delete</span>
+          </label>
           <button id="generate-code-btn" class="btn btn-primary">&#43; Generate Auth Code</button>
         </div>
       </div>
@@ -405,11 +428,22 @@
           ? `<span class="code-verified"><span class="blue-tick">&#10004;&#65039;</span> ${esc(c.verifiedName)}</span>`
           : '';
 
+        const deleteBadge = c.allowDelete
+          ? '<span class="admin-badge badge-delete">&#128274; Delete On</span>'
+          : '<span class="admin-badge badge-no-delete">&#128275; Delete Off</span>';
+
         const nameEditHtml = `
           <div class="name-edit-row">
             <input type="text" id="name-input-${c._id}" value="${esc(c.verifiedName || '')}" placeholder="Set verified name" />
             <button class="btn-name" onclick="saveName('${c._id}')">Save</button>
           </div>
+        `;
+
+        const deleteToggleHtml = `
+          <label class="delete-auth-toggle" style="margin-top:4px;">
+            <input type="checkbox" ${c.allowDelete ? 'checked' : ''} onchange="toggleDeleteAuth('${c._id}', this.checked)" />
+            <span>Allow delete</span>
+          </label>
         `;
 
         return `
@@ -419,8 +453,10 @@
               <span class="code-meta">${dateStr}${userInfo}</span>
               ${verifiedHtml}
               ${nameEditHtml}
+              ${deleteToggleHtml}
             </div>
             <div class="code-actions">
+              ${deleteBadge}
               <span class="admin-badge ${badgeClass}">${badgeText}</span>
               ${actionBtn}
             </div>
@@ -439,15 +475,17 @@
     document.getElementById('generate-code-btn').addEventListener('click', async () => {
       try {
         const verifiedName = document.getElementById('generate-name-input').value.trim();
+        const allowDelete = document.getElementById('generate-allow-delete').checked;
         const data = await adminFetch('/api/admin/generate-code', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ verifiedName: verifiedName || undefined }),
+          body: JSON.stringify({ verifiedName: verifiedName || undefined, allowDelete }),
         });
         if (!data) return;
         loadedCodes.unshift(data);
         renderCodes();
         document.getElementById('generate-name-input').value = '';
+        document.getElementById('generate-allow-delete').checked = false;
         showDashMsg('Auth code generated', 'success');
       } catch {
         showDashMsg('Failed to generate code', 'error');
@@ -503,6 +541,26 @@
     function copyCode(el) {
       const text = el.textContent;
       navigator.clipboard.writeText(text).then(() => showCopyToast()).catch(() => {});
+    }
+
+    // Toggle delete authorization
+    async function toggleDeleteAuth(codeId, allowed) {
+      try {
+        const data = await adminFetch(`/api/admin/codes/${codeId}/delete-auth`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ allowDelete: allowed }),
+        });
+        if (!data) return;
+        const idx = loadedCodes.findIndex(c => c._id === codeId);
+        if (idx !== -1) {
+          loadedCodes[idx].allowDelete = allowed;
+          renderCodes();
+        }
+        showDashMsg(allowed ? 'Delete permission enabled' : 'Delete permission disabled', 'success');
+      } catch {
+        showDashMsg('Failed to update delete permission', 'error');
+      }
     }
   </script>
 </body>

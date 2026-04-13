@@ -86,13 +86,15 @@ router.post('/generate-code', authenticateAdmin, async (req, res) => {
   try {
     const code = `AC-${crypto.randomBytes(4).toString('hex')}-${crypto.randomBytes(4).toString('hex')}-${crypto.randomBytes(4).toString('hex')}`;
     const verifiedName = req.body.verifiedName?.trim() || null;
-    const authCode = new AuthCode({ code, verifiedName });
+    const allowDelete = !!req.body.allowDelete;
+    const authCode = new AuthCode({ code, verifiedName, allowDelete });
     await authCode.save();
     res.json({
       _id: authCode._id,
       code: authCode.code,
       status: authCode.status,
       verifiedName: authCode.verifiedName,
+      allowDelete: authCode.allowDelete,
       createdAt: authCode.createdAt,
     });
   } catch (err) {
@@ -123,6 +125,7 @@ router.get('/codes', authenticateAdmin, async (req, res) => {
         code: c.code,
         status: c.status,
         verifiedName: c.verifiedName || null,
+        allowDelete: !!c.allowDelete,
         username: c.connectedUser?.username || null,
         createdAt: c.createdAt,
       })),
@@ -187,6 +190,21 @@ router.put('/codes/:codeId/status', authenticateAdmin, async (req, res) => {
     res.json({ message: `Code ${status}` });
   } catch (err) {
     console.error('Update code status error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Toggle delete authorization on an auth code
+router.put('/codes/:codeId/delete-auth', authenticateAdmin, async (req, res) => {
+  try {
+    const { allowDelete } = req.body;
+    const codeDoc = await AuthCode.findById(req.params.codeId);
+    if (!codeDoc) return res.status(404).json({ error: 'Code not found' });
+    codeDoc.allowDelete = !!allowDelete;
+    await codeDoc.save();
+    res.json({ message: allowDelete ? 'Delete permission enabled' : 'Delete permission disabled', allowDelete: codeDoc.allowDelete });
+  } catch (err) {
+    console.error('Update delete auth error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
