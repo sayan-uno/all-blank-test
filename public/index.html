@@ -127,8 +127,15 @@
         <!-- ===== STAFF MANAGEMENT (owner only) ===== -->
         <div id="staff-mgmt-section" class="mgmt-section hidden">
           <div class="mgmt-header">
-            <h3 class="section-title">&#128101; Staff Management</h3>
+            <h3 class="section-title">&#128101; Staff Management <span id="staff-count-badge" style="font-size:0.75rem; color:#94a1b2;"></span></h3>
             <button id="create-staff-btn" class="fab fab-sm" title="Create staff link">&#43;</button>
+          </div>
+
+          <!-- Staff Search Bar -->
+          <div class="search-bar" style="margin-bottom:12px;">
+            <span class="search-icon">&#128269;</span>
+            <input type="text" id="staff-search-input" placeholder="Search staff..." autocomplete="off" />
+            <button id="staff-search-clear-btn" class="search-clear hidden" title="Clear">&times;</button>
           </div>
 
           <!-- Create Staff Form (hidden) -->
@@ -167,13 +174,21 @@
           <div id="staff-links-list" class="mgmt-list">
             <p class="empty-state">No staff links yet.</p>
           </div>
+          <button id="load-more-staff-btn" class="btn btn-outline btn-sm load-more-btn hidden">Load More Staff</button>
         </div>
 
         <!-- ===== CUSTOMER MANAGEMENT (owner + staff) ===== -->
         <div id="customer-mgmt-section" class="mgmt-section hidden">
           <div class="mgmt-header">
-            <h3 class="section-title">&#128100; Customer Management</h3>
+            <h3 class="section-title">&#128100; Customer Management <span id="customer-count-badge" style="font-size:0.75rem; color:#94a1b2;"></span></h3>
             <button id="create-customer-btn" class="fab fab-sm" title="Create customer link">&#43;</button>
+          </div>
+
+          <!-- Customer Search Bar -->
+          <div class="search-bar" style="margin-bottom:12px;">
+            <span class="search-icon">&#128269;</span>
+            <input type="text" id="customer-search-input" placeholder="Search customers..." autocomplete="off" />
+            <button id="customer-search-clear-btn" class="search-clear hidden" title="Clear">&times;</button>
           </div>
 
           <!-- Create Customer Form (hidden) -->
@@ -198,13 +213,14 @@
           <div id="customer-links-list" class="mgmt-list">
             <p class="empty-state">No customer links yet.</p>
           </div>
+          <button id="load-more-customer-btn" class="btn btn-outline btn-sm load-more-btn hidden">Load More Customers</button>
         </div>
       </div>
 
       <!-- Call Links Card -->
       <div class="dash-card">
         <div class="links-header">
-          <h2>Your Call Links</h2>
+          <h2>Your Call Links <span id="links-count-badge" style="font-size:0.9rem; color:#94a1b2; font-weight:normal; margin-left:8px;"></span></h2>
           <div class="links-header-actions">
             <button id="sort-links-btn" class="icon-btn sort-btn" title="Sort: Newest first">&#8693;</button>
             <button id="add-link-btn" class="fab" title="Create new link">&#43;</button>
@@ -321,13 +337,7 @@
               </label>
             </div>
 
-            <!-- Hide Username Toggle (only shown if user has verified name) -->
-            <div id="hide-username-toggle" class="schedule-toggle hidden">
-              <label class="toggle-label">
-                <input type="checkbox" id="enable-hide-username" />
-                <span>&#128065; Hide username (show only verified name)</span>
-              </label>
-            </div>
+
 
             <div class="form-actions">
               <button type="submit" id="link-form-submit" class="btn btn-primary btn-sm">Create Link</button>

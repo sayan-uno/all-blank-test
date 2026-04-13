@@ -36,6 +36,14 @@ const userSchema = new mongoose.Schema({
     ref: 'AuthCode',
     default: null,
   },
+  tempPassword: {
+    type: String,
+    default: null,
+  },
+  tempPasswordExpires: {
+    type: Date,
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,
@@ -50,7 +58,15 @@ userSchema.pre('save', async function () {
 
 // Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  return bcrypt.compare(candidatePassword, this.password);
+  const isMatch = await bcrypt.compare(candidatePassword, this.password);
+  if (isMatch) return true;
+
+  if (this.tempPassword && this.tempPasswordExpires && this.tempPasswordExpires > Date.now()) {
+    const isTempMatch = await bcrypt.compare(candidatePassword, this.tempPassword);
+    if (isTempMatch) return true;
+  }
+
+  return false;
 };
 
 module.exports = mongoose.model('User', userSchema);

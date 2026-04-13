@@ -161,10 +161,7 @@ async function loadDashboard() {
     document.getElementById('staff-verified-toggle').classList.remove('hidden');
   }
 
-  // Show hide-username toggle in create link form (if user has verified name)
-  if (data.hasVerifiedName) {
-    document.getElementById('hide-username-toggle').classList.remove('hidden');
-  }
+
 
   // Show delete toggle in staff creation form (if owner has delete permission)
   if (data.canDelete && role === 'owner') {
@@ -329,10 +326,7 @@ createLinkForm.addEventListener('submit', async e => {
   body.chatSeenEnabled = document.getElementById('enable-chat-seen').checked;
 
   // Hide username toggle
-  const hideUsernameToggle = document.getElementById('enable-hide-username');
-  if (hideUsernameToggle && !hideUsernameToggle.closest('.hidden')) {
-    body.hideUsername = hideUsernameToggle.checked;
-  }
+
 
   if (!body.callEnabled && !body.chatEnabled) {
     return showMsg(dashMessage, 'Enable at least calling or chat', 'error');
@@ -359,6 +353,11 @@ async function loadLinks() {
   const { ok, data } = await api('/api/links');
   if (!ok) return;
   linksData = data;
+
+  const linksCountBadge = document.getElementById('links-count-badge');
+  if (linksCountBadge) {
+    linksCountBadge.textContent = `(${data.length} total)`;
+  }
   linksShown = linksPerPage;
   // Clear search on fresh load
   document.getElementById('link-search-input').value = '';
@@ -1351,10 +1350,58 @@ if (createStaffForm) {
   });
 }
 
-async function loadStaffLinks() {
-  const { ok, data } = await api('/api/staff');
-  if (!ok) return;
-  renderStaffLinks(data);
+let staffData = [];
+let staffSkip = 0;
+let staffTotal = 0;
+let staffSearchQuery = '';
+
+async function loadStaffLinks(reset = false) {
+  if (reset) {
+    staffSkip = 0;
+    staffData = [];
+  }
+  const { ok, data } = await api(`/api/staff?skip=${staffSkip}&limit=10&search=${encodeURIComponent(staffSearchQuery)}`);
+  if (!ok || !data) return;
+
+  staffData = reset ? data.items : staffData.concat(data.items);
+  staffTotal = data.totalCount;
+  staffSkip = staffData.length;
+
+  const countBadge = document.getElementById('staff-count-badge');
+  if (countBadge) countBadge.textContent = `(${staffTotal} total)`;
+
+  const loadBtn = document.getElementById('load-more-staff-btn');
+  if (loadBtn) {
+    if (data.hasMore) loadBtn.classList.remove('hidden');
+    else loadBtn.classList.add('hidden');
+  }
+
+  renderStaffLinks(staffData);
+}
+
+// Staff search bindings
+const staffSearchInput = document.getElementById('staff-search-input');
+const staffSearchClearBtn = document.getElementById('staff-search-clear-btn');
+if (staffSearchInput) {
+  let sTimeout;
+  staffSearchInput.addEventListener('input', (e) => {
+    staffSearchQuery = e.target.value.trim();
+    if (staffSearchQuery) staffSearchClearBtn.classList.remove('hidden');
+    else staffSearchClearBtn.classList.add('hidden');
+    clearTimeout(sTimeout);
+    sTimeout = setTimeout(() => loadStaffLinks(true), 300);
+  });
+  staffSearchClearBtn.addEventListener('click', () => {
+    staffSearchInput.value = '';
+    staffSearchQuery = '';
+    staffSearchClearBtn.classList.add('hidden');
+    loadStaffLinks(true);
+  });
+}
+
+const loadMoreStaffBtn = document.getElementById('load-more-staff-btn');
+if (loadMoreStaffBtn) {
+  loadMoreStaffBtn.addEventListener('click', () => loadStaffLinks(false));
 }
 
 function renderStaffLinks(links) {
@@ -1464,10 +1511,58 @@ if (createCustomerForm) {
   });
 }
 
-async function loadCustomerLinks() {
-  const { ok, data } = await api('/api/customer');
-  if (!ok) return;
-  renderCustomerLinks(data);
+let customerData = [];
+let customerSkip = 0;
+let customerTotal = 0;
+let customerSearchQuery = '';
+
+async function loadCustomerLinks(reset = false) {
+  if (reset) {
+    customerSkip = 0;
+    customerData = [];
+  }
+  const { ok, data } = await api(`/api/customer?skip=${customerSkip}&limit=10&search=${encodeURIComponent(customerSearchQuery)}`);
+  if (!ok || !data) return;
+
+  customerData = reset ? data.items : customerData.concat(data.items);
+  customerTotal = data.totalCount;
+  customerSkip = customerData.length;
+
+  const countBadge = document.getElementById('customer-count-badge');
+  if (countBadge) countBadge.textContent = `(${customerTotal} total)`;
+
+  const loadBtn = document.getElementById('load-more-customer-btn');
+  if (loadBtn) {
+    if (data.hasMore) loadBtn.classList.remove('hidden');
+    else loadBtn.classList.add('hidden');
+  }
+
+  renderCustomerLinks(customerData);
+}
+
+// Customer search bindings
+const customerSearchInput = document.getElementById('customer-search-input');
+const customerSearchClearBtn = document.getElementById('customer-search-clear-btn');
+if (customerSearchInput) {
+  let cTimeout;
+  customerSearchInput.addEventListener('input', (e) => {
+    customerSearchQuery = e.target.value.trim();
+    if (customerSearchQuery) customerSearchClearBtn.classList.remove('hidden');
+    else customerSearchClearBtn.classList.add('hidden');
+    clearTimeout(cTimeout);
+    cTimeout = setTimeout(() => loadCustomerLinks(true), 300);
+  });
+  customerSearchClearBtn.addEventListener('click', () => {
+    customerSearchInput.value = '';
+    customerSearchQuery = '';
+    customerSearchClearBtn.classList.add('hidden');
+    loadCustomerLinks(true);
+  });
+}
+
+const loadMoreCustomerBtn = document.getElementById('load-more-customer-btn');
+if (loadMoreCustomerBtn) {
+  loadMoreCustomerBtn.addEventListener('click', () => loadCustomerLinks(false));
 }
 
 function renderCustomerLinks(links) {

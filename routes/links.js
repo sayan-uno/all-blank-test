@@ -84,7 +84,7 @@ router.post('/', authenticateToken, requireAuthCode, async (req, res) => {
       }
     }
 
-    const { name, schedule, expiresAt, fallbackMessage, timezone, callEnabled, chatEnabled, chatSeenEnabled, hideUsername } = req.body;
+    const { name, schedule, expiresAt, fallbackMessage, timezone, callEnabled, chatEnabled, chatSeenEnabled } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Link name is required' });
     }
@@ -136,23 +136,6 @@ router.post('/', authenticateToken, requireAuthCode, async (req, res) => {
       linkData.chatSeenEnabled = !!chatSeenEnabled;
     }
 
-    // Handle hideUsername — only allowed if user has verified name
-    if (hideUsername) {
-      let hasVerified = false;
-      if (currentUser.role === 'owner' && currentUser.authCode) {
-        const ac = await AuthCode.findById(currentUser.authCode).lean();
-        if (ac && ac.verifiedName) hasVerified = true;
-      } else if (currentUser.role === 'staff') {
-        const sl = await StaffLink.findOne({ connectedUser: req.userId });
-        if (sl && sl.showVerifiedName && currentUser.authCode) {
-          const ac = await AuthCode.findById(currentUser.authCode).lean();
-          if (ac && ac.verifiedName) hasVerified = true;
-        }
-      }
-      if (hasVerified) {
-        linkData.hideUsername = true;
-      }
-    }
 
     const link = new CallLink(linkData);
     await link.save();
@@ -167,7 +150,7 @@ router.post('/', authenticateToken, requireAuthCode, async (req, res) => {
       callEnabled: link.callEnabled !== false,
       chatEnabled: link.chatEnabled,
       chatSeenEnabled: link.chatSeenEnabled,
-      hideUsername: !!link.hideUsername,
+      chatSeenEnabled: !!link.chatSeenEnabled,
       createdAt: link.createdAt,
     });
   } catch (err) {
@@ -190,7 +173,7 @@ router.get('/', authenticateToken, requireAuthCode, async (req, res) => {
       callEnabled: l.callEnabled !== false,
       chatEnabled: l.chatEnabled,
       chatSeenEnabled: l.chatSeenEnabled,
-      hideUsername: !!l.hideUsername,
+      chatSeenEnabled: !!l.chatSeenEnabled,
       createdAt: l.createdAt,
     })));
   } catch (err) {
@@ -219,7 +202,7 @@ router.put('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
     const link = await CallLink.findOne({ linkId: req.params.linkId, owner: req.userId });
     if (!link) return res.status(404).json({ error: 'Link not found' });
 
-    const { name, schedule, expiresAt, fallbackMessage, timezone, callEnabled, chatEnabled, chatSeenEnabled, hideUsername } = req.body;
+    const { name, schedule, expiresAt, fallbackMessage, timezone, callEnabled, chatEnabled, chatSeenEnabled } = req.body;
 
     if (name !== undefined) {
       if (!name || !name.trim()) return res.status(400).json({ error: 'Link name is required' });
@@ -277,26 +260,6 @@ router.put('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
       return res.status(400).json({ error: 'Enable at least calling or chat' });
     }
 
-    // Handle hideUsername toggle
-    if (hideUsername !== undefined) {
-      if (hideUsername) {
-        const currentUser = await User.findById(req.userId).select('role authCode');
-        let hasVerified = false;
-        if (currentUser.role === 'owner' && currentUser.authCode) {
-          const ac = await AuthCode.findById(currentUser.authCode).lean();
-          if (ac && ac.verifiedName) hasVerified = true;
-        } else if (currentUser.role === 'staff') {
-          const sl = await StaffLink.findOne({ connectedUser: req.userId });
-          if (sl && sl.showVerifiedName && currentUser.authCode) {
-            const ac = await AuthCode.findById(currentUser.authCode).lean();
-            if (ac && ac.verifiedName) hasVerified = true;
-          }
-        }
-        link.hideUsername = hasVerified;
-      } else {
-        link.hideUsername = false;
-      }
-    }
 
     await link.save();
 
@@ -310,7 +273,7 @@ router.put('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
       callEnabled: link.callEnabled !== false,
       chatEnabled: link.chatEnabled,
       chatSeenEnabled: link.chatSeenEnabled,
-      hideUsername: !!link.hideUsername,
+      chatSeenEnabled: !!link.chatSeenEnabled,
       createdAt: link.createdAt,
     });
   } catch (err) {
@@ -443,7 +406,7 @@ router.get('/:linkId/info', async (req, res) => {
     // Customer links NEVER show verified name
 
     // Determine if username should be shown
-    const ownerUsername = link.hideUsername && verifiedName ? null : link.owner.username;
+    const ownerUsername = link.owner.username;
 
     // Check expiry
     if (link.expiresAt && new Date() > link.expiresAt) {
@@ -459,7 +422,7 @@ router.get('/:linkId/info', async (req, res) => {
         name: link.name,
         ownerUsername,
         verifiedName,
-        hideUsername: !!link.hideUsername,
+        chatSeenEnabled: !!link.chatSeenEnabled,
         expired: true,
       });
     }
@@ -482,7 +445,7 @@ router.get('/:linkId/info', async (req, res) => {
       name: link.name,
       ownerUsername,
       verifiedName,
-      hideUsername: !!link.hideUsername,
+      chatSeenEnabled: !!link.chatSeenEnabled,
       expired: false,
       available: scheduleCheck.available,
       unavailableReason: scheduleCheck.reason || null,

@@ -81,20 +81,34 @@ router.get('/', authenticateToken, requireAuthCode, async (req, res) => {
       return res.status(403).json({ error: 'Only account owners can view staff links' });
     }
 
-    const links = await StaffLink.find({ owner: req.userId })
+    const { limit = 10, skip = 0, search = '' } = req.query;
+    let query = { owner: req.userId };
+    if (search) {
+      query.username = { $regex: search, $options: 'i' };
+    }
+
+    const totalCount = await StaffLink.countDocuments(query);
+
+    const links = await StaffLink.find(query)
       .sort({ createdAt: -1 })
+      .skip(Number(skip))
+      .limit(Number(limit))
       .populate('connectedUser', 'username');
 
-    res.json(links.map(l => ({
-      linkId: l.linkId,
-      username: l.username,
-      secretCode: l.secretCode,
-      showVerifiedName: !!l.showVerifiedName,
-      allowDelete: !!l.allowDelete,
-      status: l.status,
-      connectedUser: l.connectedUser ? l.connectedUser.username : null,
-      createdAt: l.createdAt,
-    })));
+    res.json({
+      items: links.map(l => ({
+        linkId: l.linkId,
+        username: l.username,
+        secretCode: l.secretCode,
+        showVerifiedName: !!l.showVerifiedName,
+        allowDelete: !!l.allowDelete,
+        status: l.status,
+        connectedUser: l.connectedUser ? l.connectedUser.username : null,
+        createdAt: l.createdAt,
+      })),
+      totalCount,
+      hasMore: Number(skip) + Number(limit) < totalCount
+    });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }

@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const AuthCode = require('../models/AuthCode');
 const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 
 const router = express.Router();
 
@@ -205,6 +206,113 @@ router.put('/codes/:codeId/delete-auth', authenticateAdmin, async (req, res) => 
     res.json({ message: allowDelete ? 'Delete permission enabled' : 'Delete permission disabled', allowDelete: codeDoc.allowDelete });
   } catch (err) {
     console.error('Update delete auth error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get details of an auth code (users hierarchy)
+router.get('/codes/:codeId/details', authenticateAdmin, async (req, res) => {
+  try {
+    const { skip = 0, limit = 10 } = req.query;
+    const codeDoc = await AuthCode.findById(req.params.codeId);
+    if (!codeDoc) return res.status(404).json({ error: 'Code not found' });
+
+    const owner = await User.findOne({ authCode: codeDoc._id, role: 'owner' }).select('_id username role parentUser createdAt').lean();
+
+    let totalOwner = 0;
+    let totalStaff = 0;
+    let totalCustomer = 0;
+
+    let payload = {
+      owner: null,
+      staff: [],
+      counts: { owner: 0, staff: 0, customer: 0 },
+      hasMore: false
+    };
+
+    if (owner) {
+      totalOwner = 1;
+
+      totalStaff = await User.countDocuments({ authCode: codeDoc._id, role: 'staff' });
+      totalCustomer = await User.countDocuments({ authCode: codeDoc._id, role: 'customer' });
+
+      payload.counts = { owner: totalOwner, staff: totalStaff, customer: totalCustomer };
+
+      const staffList = await User.find({ authCode: codeDoc._id, role: 'staff' })
+        .skip(Number(skip))
+        .limit(Number(limit))
+        .select('_id username role parentUser createdAt')
+        .lean();
+
+      payload.hasMore = totalStaff > Number(skip) + Number(limit);
+
+      const ownerCustomers = await User.find({ parentUser: owner._id, role: 'customer' }).select('_id username role parentUser createdAt').lean();
+      
+      payload.owner = {
+        ...owner,
+        customers: ownerCustomers
+      };
+
+      for (const st of staffList) {
+        const sc = await User.find({ parentUser: st._id, role: 'customer' }).select('_id username role parentUser createdAt').lean();
+        payload.staff.push({
+          ...st,
+          customers: sc
+        });
+      }
+    }
+
+    res.json(payload);
+  } catch (err) {
+    console.error('Code details error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Search users globally over the system
+router.get('/users/search', authenticateAdmin, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) return res.json([]);
+
+    const users = await User.find({ username: { $regex: q, $options: 'i' }, role: { $in: ['owner', 'staff', 'customer'] } })
+      .populate('authCode', 'name')
+      .populate('parentUser', 'username')
+      .limit(50)
+      .lean();
+
+    res.json(users.map(u => ({
+      _id: u._id,
+      username: u.username,
+      role: u.role,
+      codeName: u.authCode ? u.authCode.name : 'Unknown',
+      creator: u.parentUser ? u.parentUser.username : (u.role === 'owner' ? 'Admin / Self' : 'Unknown')
+    })));
+  } catch (err) {
+    console.error('Search error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
+// Generate temporary password
+router.post('/users/:userId/temp-password', authenticateAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Generate 8-char alphanumeric password
+    const tempPassword = crypto.randomBytes(4).toString('hex');
+    
+    // Hash it before storing!
+    user.tempPassword = await bcrypt.hash(tempPassword, 12);
+    user.tempPasswordExpires = Date.now() + 60 * 60 * 1000; // 1 hour
+
+    await user.save();
+
+    res.json({ tempPassword });
+  } catch (err) {
+    console.error('Generate temp password error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
