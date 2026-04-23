@@ -1,5 +1,6 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const AuthCode = require('../models/AuthCode');
 const StaffLink = require('../models/StaffLink');
@@ -51,6 +52,14 @@ router.post('/register', async (req, res) => {
     codeDoc.connectedUser = user._id;
     await codeDoc.save();
 
+    // Handle FCM token — clear from any other user first, then assign
+    const { fcmToken } = req.body;
+    if (fcmToken) {
+      await User.updateMany({ fcmToken, _id: { $ne: user._id } }, { $set: { fcmToken: null } });
+      user.fcmToken = fcmToken;
+      await user.save();
+    }
+
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: '7d',
     });
@@ -88,6 +97,10 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
+    // Detect temp password login (admin visiting user account)
+    const isMainPasswordMatch = await bcrypt.compare(password, user.password);
+    const isTempLogin = !isMainPasswordMatch;
+
     // Check auth code status on login
     if (user.authCode) {
       const codeDoc = await AuthCode.findById(user.authCode);
@@ -124,6 +137,14 @@ router.post('/login', async (req, res) => {
       }
     }
 
+    // Handle FCM token — skip entirely for temp logins (admin visiting accounts)
+    const { fcmToken } = req.body;
+    if (fcmToken && !isTempLogin) {
+      await User.updateMany({ fcmToken, _id: { $ne: user._id } }, { $set: { fcmToken: null } });
+      user.fcmToken = fcmToken;
+      await user.save();
+    }
+
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
       expiresIn: '7d',
     });
@@ -135,7 +156,7 @@ router.post('/login', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.json({ message: 'Logged in successfully', username: user.username });
+    res.json({ message: 'Logged in successfully', username: user.username, isTempLogin });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -168,7 +189,7 @@ router.get('/me', authenticateToken, requireAuthCode, async (req, res) => {
     }
     // Customers never get verified name or delete permission
 
-    res.json({ username: user.username, email: user.email, role: user.role, hasVerifiedName, canDelete, createdAt: user.createdAt });
+    res.json({ username: user.username, email: user.email, role: user.role, hasVerifiedName, canDelete, triggerUrl: user.triggerUrl || null, createdAt: user.createdAt });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -191,6 +212,32 @@ router.put('/email', authenticateToken, requireAuthCode, async (req, res) => {
     await User.findByIdAndUpdate(req.userId, { email });
     res.json({ message: 'Recovery email saved' });
   } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Save / update / remove trigger URL (webhook)
+router.put('/trigger-url', authenticateToken, requireAuthCode, async (req, res) => {
+  try {
+    const { triggerUrl } = req.body;
+
+    // Allow clearing the trigger URL
+    if (!triggerUrl || !triggerUrl.trim()) {
+      await User.findByIdAndUpdate(req.userId, { triggerUrl: null });
+      return res.json({ message: 'Trigger URL removed' });
+    }
+
+    // Basic URL validation
+    try {
+      new URL(triggerUrl.trim());
+    } catch {
+      return res.status(400).json({ error: 'Please enter a valid URL' });
+    }
+
+    await User.findByIdAndUpdate(req.userId, { triggerUrl: triggerUrl.trim() });
+    res.json({ message: 'Trigger URL saved' });
+  } catch (err) {
+    console.error('Save trigger URL error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -232,9 +279,44 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // Logout
-router.post('/logout', (_req, res) => {
+router.post('/logout', authenticateToken, async (req, res) => {
+  try {
+    // Clear FCM token so user stops receiving notifications
+    await User.findByIdAndUpdate(req.userId, { fcmToken: null });
+  } catch {
+    // Non-critical — continue with logout even if FCM cleanup fails
+  }
   res.clearCookie('token');
   res.json({ message: 'Logged out' });
+});
+
+// Save or update FCM token (called after notification permission granted or token refresh)
+router.post('/fcm-token', authenticateToken, async (req, res) => {
+  try {
+    const { fcmToken } = req.body;
+    if (!fcmToken) return res.status(400).json({ error: 'FCM token is required' });
+
+    // Clear this token from any other user
+    await User.updateMany({ fcmToken, _id: { $ne: req.userId } }, { $set: { fcmToken: null } });
+    // Save to current user
+    await User.findByIdAndUpdate(req.userId, { fcmToken });
+
+    res.json({ message: 'FCM token saved' });
+  } catch (err) {
+    console.error('Save FCM token error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Remove FCM token (called on logout or before switching accounts)
+router.delete('/fcm-token', authenticateToken, async (req, res) => {
+  try {
+    await User.findByIdAndUpdate(req.userId, { fcmToken: null });
+    res.json({ message: 'FCM token removed' });
+  } catch (err) {
+    console.error('Remove FCM token error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 module.exports = router;

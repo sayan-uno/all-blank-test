@@ -96,13 +96,16 @@
       </div>
     </header>
 
-    <main class="main-content grid-layout">
-      
-      <!-- Left Column / Full -->
-      <div class="column">
-        <!-- Settings Panel (hidden by default) -->
-        <div id="settings-panel" class="content-block hidden" style="margin-bottom: 32px;">
-        <h3 class="section-title">Account Settings</h3>
+    <!-- Dashboard Tab Bar -->
+    <nav class="dash-tabs">
+      <button class="dash-tab active" data-tab="overview">&#128222; Overview</button>
+      <button id="team-tab-btn" class="dash-tab hidden" data-tab="team">&#128101; Team <span id="team-tab-badge" class="tab-badge"></span></button>
+    </nav>
+
+    <!-- Settings Panel (floating overlay, hidden by default) -->
+    <div id="settings-panel" class="main-content hidden" style="padding-bottom:0;">
+      <div class="content-block">
+        <h3 class="section-title">&#9881; Account Settings</h3>
         <div class="info-row">
           <span class="info-label">Username</span>
           <span id="info-username" class="info-value"></span>
@@ -127,113 +130,188 @@
           </div>
           <button type="submit" class="btn btn-secondary btn-sm">Save Recovery Email</button>
         </form>
+
+        <!-- Trigger URL Section -->
+        <div id="trigger-section" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
+          <h3 class="section-title" style="font-size: 0.95rem; margin-bottom: 8px;">&#128279; Trigger URL (Webhook)</h3>
+          <p style="font-size: 0.78rem; color: #94a1b2; margin-bottom: 10px;">Receive a JSON POST request to your URL whenever an event happens (calls, messages, link visits).</p>
+          <div class="info-row" id="trigger-url-display" style="margin-bottom: 10px;">
+            <span class="info-label">Current URL</span>
+            <span id="info-trigger-url" class="info-value" style="word-break: break-all;">Not set</span>
+          </div>
+          <form id="trigger-url-form" class="form active">
+            <div class="input-group">
+              <span class="input-icon">&#128279;</span>
+              <input type="url" id="trigger-url-input" placeholder="https://your-webhook-url.com/endpoint" />
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button type="submit" class="btn btn-secondary btn-sm">Save Trigger URL</button>
+              <button type="button" id="remove-trigger-btn" class="btn btn-outline btn-sm" style="color: #e53170;">Remove</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- API Integration Section -->
+        <div id="api-integration-section" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
+          <h3 class="section-title" style="font-size: 0.95rem; margin-bottom: 8px;">&#128640; API Integration (External Website)</h3>
+          <p style="font-size: 0.78rem; color: #94a1b2; margin-bottom: 10px;">Generate a unique API URL that external websites can use to create call links automatically. When a website sends a JSON request with a username, a personalized call link is generated and returned.</p>
+
+          <!-- Current API URL display (shown when endpoint exists) -->
+          <div id="api-url-display" class="hidden" style="margin-bottom: 14px;">
+            <div class="info-row" style="margin-bottom: 6px;">
+              <span class="info-label">API URL</span>
+              <span id="info-api-url" class="info-value" style="word-break: break-all; font-size: 0.75rem;"></span>
+            </div>
+            <div class="info-row" style="margin-bottom: 10px;">
+              <span class="info-label">Generated Links</span>
+              <span id="info-api-link-count" class="info-value">0</span>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
+              <button type="button" id="copy-api-url-btn" class="btn btn-secondary btn-sm">&#128203; Copy URL</button>
+              <button type="button" id="edit-api-config-btn" class="btn btn-outline btn-sm">&#9998; Update Config</button>
+              <button type="button" id="regenerate-api-key-btn" class="btn btn-outline btn-sm">&#8635; New Key</button>
+              <button type="button" id="revoke-api-btn" class="btn btn-outline btn-sm" style="color: #e53170;">&#128465; Revoke</button>
+            </div>
+
+            <!-- Usage example -->
+            <div class="api-usage-box" style="background: rgba(0,0,0,0.25); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;">
+              <p style="font-size: 0.72rem; color: #94a1b2; margin-bottom: 6px; font-weight: 600;">&#128196; Usage Example (POST request):</p>
+              <pre id="api-usage-code" style="font-size: 0.7rem; color: #7ee787; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; margin: 0;"></pre>
+            </div>
+
+            <!-- Generated links list -->
+            <div id="api-generated-links-section" class="hidden">
+              <h4 style="font-size: 0.85rem; color: #e0e6ed; margin-bottom: 8px;">&#128279; Generated Links</h4>
+              <div id="api-generated-links-list" style="max-height: 200px; overflow-y: auto;"></div>
+            </div>
+          </div>
+
+          <!-- Generate / Config Form (shown when no endpoint or when editing) -->
+          <div id="api-config-form-wrapper">
+            <button type="button" id="show-api-config-form-btn" class="btn btn-primary btn-sm" style="margin-bottom: 12px;">&#128640; Generate API URL</button>
+
+            <div id="api-config-form-panel" class="hidden">
+              <form id="api-config-form" class="form active">
+                <h4 id="api-form-title" style="font-size: 0.88rem; color: #e0e6ed; margin-bottom: 10px;">Configure Default Link Settings</h4>
+                <p style="font-size: 0.72rem; color: #94a1b2; margin-bottom: 12px;">These settings will be applied to every call link generated via this API.</p>
+
+                <!-- Schedule Toggle -->
+                <div class="schedule-toggle">
+                  <label class="toggle-label">
+                    <input type="checkbox" id="api-enable-schedule" />
+                    <span>Set availability schedule</span>
+                  </label>
+                </div>
+                <div id="api-schedule-builder" class="schedule-builder hidden">
+                  <div class="timezone-selector">
+                    <label class="tz-option">
+                      <input type="radio" name="api-timezone" value="IST" checked />
+                      <span class="tz-label">&#127470;&#127475; Indian (IST)</span>
+                    </label>
+                    <label class="tz-option">
+                      <input type="radio" name="api-timezone" value="UTC" />
+                      <span class="tz-label">&#127760; International (UTC)</span>
+                    </label>
+                  </div>
+                  <div class="schedule-days" id="api-schedule-days">
+                    <label class="day-check"><input type="checkbox" value="1" /> Mon</label>
+                    <label class="day-check"><input type="checkbox" value="2" /> Tue</label>
+                    <label class="day-check"><input type="checkbox" value="3" /> Wed</label>
+                    <label class="day-check"><input type="checkbox" value="4" /> Thu</label>
+                    <label class="day-check"><input type="checkbox" value="5" /> Fri</label>
+                    <label class="day-check"><input type="checkbox" value="6" /> Sat</label>
+                    <label class="day-check"><input type="checkbox" value="0" /> Sun</label>
+                  </div>
+                  <div class="schedule-time-row">
+                    <div class="input-group input-sm">
+                      <span class="input-icon">&#128336;</span>
+                      <input type="time" id="api-schedule-start" value="10:00" />
+                    </div>
+                    <span class="time-sep">to</span>
+                    <div class="input-group input-sm">
+                      <span class="input-icon">&#128337;</span>
+                      <input type="time" id="api-schedule-end" value="16:00" />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Expiry Toggle -->
+                <div class="schedule-toggle">
+                  <label class="toggle-label">
+                    <input type="checkbox" id="api-enable-expiry" />
+                    <span>Set expiry date for links</span>
+                  </label>
+                </div>
+                <div id="api-expiry-builder" class="hidden" style="margin-bottom:12px;">
+                  <div class="input-group">
+                    <span class="input-icon">&#128197;</span>
+                    <input type="datetime-local" id="api-expiry-input" />
+                  </div>
+                </div>
+
+                <!-- Fallback Message -->
+                <div class="schedule-toggle">
+                  <label class="toggle-label">
+                    <input type="checkbox" id="api-enable-fallback" />
+                    <span>Custom busy message</span>
+                  </label>
+                </div>
+                <div id="api-fallback-builder" class="hidden" style="margin-bottom:12px;">
+                  <div class="input-group">
+                    <span class="input-icon">&#128172;</span>
+                    <input type="text" id="api-fallback-input" placeholder="e.g. All executives are busy..." maxlength="200" />
+                  </div>
+                </div>
+
+                <!-- Call Toggle -->
+                <div class="schedule-toggle">
+                  <label class="toggle-label">
+                    <input type="checkbox" id="api-enable-call" checked />
+                    <span>Enable calling</span>
+                  </label>
+                </div>
+
+                <!-- Chat Toggle -->
+                <div class="schedule-toggle">
+                  <label class="toggle-label">
+                    <input type="checkbox" id="api-enable-chat" />
+                    <span>Enable chat</span>
+                  </label>
+                </div>
+
+                <!-- Chat Seen Toggle -->
+                <div id="api-chat-seen-toggle" class="schedule-toggle hidden" style="margin-left: 24px;">
+                  <label class="toggle-label">
+                    <input type="checkbox" id="api-enable-chat-seen" />
+                    <span>Let visitors see read receipts</span>
+                  </label>
+                </div>
+
+                <div class="form-actions" style="margin-top: 12px;">
+                  <button type="submit" id="api-form-submit" class="btn btn-primary btn-sm">Generate API URL</button>
+                  <button type="button" id="cancel-api-config-btn" class="btn btn-outline btn-sm">Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
         <div id="dash-message" class="message hidden"></div>
-        </div>
+      </div>
+    </div>
 
-        <!-- ===== STAFF MANAGEMENT (owner only) ===== -->
-        <div id="staff-mgmt-section" class="content-block hidden" style="margin-bottom: 32px;">
-          <div class="mgmt-header">
-            <h3 class="section-title">&#128101; Staff Management <span id="staff-count-badge" style="font-size:0.75rem; color:#94a1b2;"></span></h3>
-            <button id="create-staff-btn" class="fab fab-sm" title="Create staff link">&#43;</button>
-          </div>
-
-          <!-- Staff Search Bar -->
-          <div class="search-bar" style="margin-bottom:12px;">
-            <span class="search-icon">&#128269;</span>
-            <input type="text" id="staff-search-input" placeholder="Search staff..." autocomplete="off" />
-            <button id="staff-search-clear-btn" class="search-clear hidden" title="Clear">&times;</button>
-          </div>
-
-          <!-- Create Staff Form (hidden) -->
-          <div id="create-staff-panel" class="create-link-panel hidden">
-            <form id="create-staff-form" class="form active">
-              <h3 class="form-panel-title">Create Staff Link</h3>
-              <div class="input-group">
-                <span class="input-icon">&#128100;</span>
-                <input type="text" id="staff-username-input" placeholder="Username for this staff" minlength="3" maxlength="30" required />
-              </div>
-              <div class="input-group">
-                <span class="input-icon">&#128273;</span>
-                <input type="text" id="staff-code-input" placeholder="Secret code (min 4 chars)" minlength="4" required />
-              </div>
-              <!-- Share verified name toggle (only shown if owner has verified name) -->
-              <div id="staff-verified-toggle" class="schedule-toggle hidden">
-                <label class="toggle-label">
-                  <input type="checkbox" id="staff-show-verified" />
-                  <span>&#9989; Share verified name with this staff</span>
-                </label>
-              </div>
-              <!-- Allow delete toggle (only shown if owner has delete permission) -->
-              <div id="staff-delete-toggle" class="schedule-toggle hidden">
-                <label class="toggle-label">
-                  <input type="checkbox" id="staff-allow-delete" />
-                  <span>&#128274; Allow delete permission for this staff</span>
-                </label>
-              </div>
-              <div class="form-actions">
-                <button type="submit" class="btn btn-primary btn-sm">Create Staff</button>
-                <button type="button" id="cancel-staff-btn" class="btn btn-outline btn-sm">Cancel</button>
-              </div>
-            </form>
-          </div>
-
-          <div id="staff-links-list" class="mgmt-list">
-            <p class="empty-state">No staff links yet.</p>
-          </div>
-          <button id="load-more-staff-btn" class="btn btn-outline btn-sm load-more-btn hidden">Load More Staff</button>
-        </div>
-
-        <!-- ===== CUSTOMER MANAGEMENT (owner + staff) ===== -->
-        <div id="customer-mgmt-section" class="content-block hidden" style="margin-bottom: 32px;">
-          <div class="mgmt-header">
-            <h3 class="section-title">&#128100; Customer Management <span id="customer-count-badge" style="font-size:0.75rem; color:#94a1b2;"></span></h3>
-            <button id="create-customer-btn" class="fab fab-sm" title="Create customer link">&#43;</button>
-          </div>
-
-          <!-- Customer Search Bar -->
-          <div class="search-bar" style="margin-bottom:12px;">
-            <span class="search-icon">&#128269;</span>
-            <input type="text" id="customer-search-input" placeholder="Search customers..." autocomplete="off" />
-            <button id="customer-search-clear-btn" class="search-clear hidden" title="Clear">&times;</button>
-          </div>
-
-          <!-- Create Customer Form (hidden) -->
-          <div id="create-customer-panel" class="create-link-panel hidden">
-            <form id="create-customer-form" class="form active">
-              <h3 class="form-panel-title">Create Customer Link</h3>
-              <div class="input-group">
-                <span class="input-icon">&#128100;</span>
-                <input type="text" id="customer-username-input" placeholder="Username for this customer" minlength="3" maxlength="30" required />
-              </div>
-              <div class="input-group">
-                <span class="input-icon">&#128273;</span>
-                <input type="text" id="customer-code-input" placeholder="Secret code (min 4 chars)" minlength="4" required />
-              </div>
-              <div class="form-actions">
-                <button type="submit" class="btn btn-primary btn-sm">Create Customer</button>
-                <button type="button" id="cancel-customer-btn" class="btn btn-outline btn-sm">Cancel</button>
-              </div>
-            </form>
-          </div>
-
-          <div id="customer-links-list" class="mgmt-list">
-            <p class="empty-state">No customer links yet.</p>
-          </div>
-          <button id="load-more-customer-btn" class="btn btn-outline btn-sm load-more-btn hidden">Load More Customers</button>
-        </div>
-      </div> <!-- End Column -->
-
-      <!-- Right Column -->
-      <div class="column">
-        <!-- Call Links Card -->
+    <!-- ========== TAB: OVERVIEW ========== -->
+    <div id="tab-overview" class="dash-tab-content active">
+      <div class="main-content">
+        <!-- Call Links -->
         <div class="content-block">
-        <div class="links-header">
-          <h2>Your Call Links <span id="links-count-badge" style="font-size:0.9rem; color:#94a1b2; font-weight:normal; margin-left:8px;"></span></h2>
-          <div class="links-header-actions">
-            <button id="sort-links-btn" class="icon-btn sort-btn" title="Sort: Newest first">&#8693;</button>
-            <button id="add-link-btn" class="fab" title="Create new link">&#43;</button>
+          <div class="links-header">
+            <h2>&#128279; Your Call Links <span id="links-count-badge" style="font-size:0.9rem; color:#94a1b2; font-weight:normal; margin-left:8px;"></span></h2>
+            <div class="links-header-actions">
+              <button id="sort-links-btn" class="icon-btn sort-btn" title="Sort: Newest first">&#8693;</button>
+              <button id="add-link-btn" class="fab" title="Create new link">&#43;</button>
+            </div>
           </div>
-        </div>
 
         <!-- Search Bar -->
         <div class="search-bar">
@@ -386,9 +464,104 @@
         </div>
       </div>
 
-      <!-- Incoming Calls Container (supports multiple stacked popups) -->
-      <div id="incoming-calls-container"></div>
-    </div>
+      </div> <!-- end main-content -->
+    </div> <!-- end tab-overview -->
+
+    <!-- ========== TAB: TEAM MANAGEMENT ========== -->
+    <div id="tab-team" class="dash-tab-content">
+      <div class="main-content">
+
+        <!-- Staff Management -->
+        <div id="staff-mgmt-section" class="content-block hidden">
+          <div class="mgmt-header">
+            <h3 class="section-title">&#128101; Staff Management <span id="staff-count-badge" style="font-size:0.8rem; color:#94a1b2;"></span></h3>
+            <button id="create-staff-btn" class="fab fab-sm" title="Create staff link">&#43;</button>
+          </div>
+
+          <div class="search-bar">
+            <span class="search-icon">&#128269;</span>
+            <input type="text" id="staff-search-input" placeholder="Search staff..." autocomplete="off" />
+            <button id="staff-search-clear-btn" class="search-clear hidden" title="Clear">&times;</button>
+          </div>
+
+          <div id="create-staff-panel" class="create-link-panel hidden">
+            <form id="create-staff-form" class="form active">
+              <h3 class="form-panel-title">Create Staff Link</h3>
+              <div class="input-group">
+                <span class="input-icon">&#128100;</span>
+                <input type="text" id="staff-username-input" placeholder="Username for this staff" minlength="3" maxlength="30" required />
+              </div>
+              <div class="input-group">
+                <span class="input-icon">&#128273;</span>
+                <input type="text" id="staff-code-input" placeholder="Secret code (min 4 chars)" minlength="4" required />
+              </div>
+              <div id="staff-verified-toggle" class="schedule-toggle hidden">
+                <label class="toggle-label">
+                  <input type="checkbox" id="staff-show-verified" />
+                  <span>&#9989; Share verified name with this staff</span>
+                </label>
+              </div>
+              <div id="staff-delete-toggle" class="schedule-toggle hidden">
+                <label class="toggle-label">
+                  <input type="checkbox" id="staff-allow-delete" />
+                  <span>&#128274; Allow delete permission for this staff</span>
+                </label>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-sm">Create Staff</button>
+                <button type="button" id="cancel-staff-btn" class="btn btn-outline btn-sm">Cancel</button>
+              </div>
+            </form>
+          </div>
+
+          <div id="staff-links-list" class="mgmt-list">
+            <p class="empty-state">No staff links yet.</p>
+          </div>
+          <button id="load-more-staff-btn" class="btn btn-outline btn-sm load-more-btn hidden">Load More Staff</button>
+        </div>
+
+        <!-- Customer Management -->
+        <div id="customer-mgmt-section" class="content-block hidden">
+          <div class="mgmt-header">
+            <h3 class="section-title">&#128100; Customer Management <span id="customer-count-badge" style="font-size:0.8rem; color:#94a1b2;"></span></h3>
+            <button id="create-customer-btn" class="fab fab-sm" title="Create customer link">&#43;</button>
+          </div>
+
+          <div class="search-bar">
+            <span class="search-icon">&#128269;</span>
+            <input type="text" id="customer-search-input" placeholder="Search customers..." autocomplete="off" />
+            <button id="customer-search-clear-btn" class="search-clear hidden" title="Clear">&times;</button>
+          </div>
+
+          <div id="create-customer-panel" class="create-link-panel hidden">
+            <form id="create-customer-form" class="form active">
+              <h3 class="form-panel-title">Create Customer Link</h3>
+              <div class="input-group">
+                <span class="input-icon">&#128100;</span>
+                <input type="text" id="customer-username-input" placeholder="Username for this customer" minlength="3" maxlength="30" required />
+              </div>
+              <div class="input-group">
+                <span class="input-icon">&#128273;</span>
+                <input type="text" id="customer-code-input" placeholder="Secret code (min 4 chars)" minlength="4" required />
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-sm">Create Customer</button>
+                <button type="button" id="cancel-customer-btn" class="btn btn-outline btn-sm">Cancel</button>
+              </div>
+            </form>
+          </div>
+
+          <div id="customer-links-list" class="mgmt-list">
+            <p class="empty-state">No customer links yet.</p>
+          </div>
+          <button id="load-more-customer-btn" class="btn btn-outline btn-sm load-more-btn hidden">Load More Customers</button>
+        </div>
+
+      </div> <!-- end main-content -->
+    </div> <!-- end tab-team -->
+
+    <!-- Incoming Calls Container (global, outside tabs) -->
+    <div id="incoming-calls-container"></div>
   </div>
 
   <!-- ========== IN-CALL SCREEN ========== -->
@@ -436,6 +609,8 @@
   <audio id="remote-audio" autoplay playsinline></audio>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

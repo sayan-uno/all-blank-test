@@ -230,7 +230,7 @@ router.get('/join/:linkId', async (req, res) => {
 // Public: join as customer
 router.post('/join/:linkId', async (req, res) => {
   try {
-    const { secretCode } = req.body;
+    const { secretCode, fcmToken } = req.body;
     if (!secretCode) {
       return res.status(400).json({ error: 'Secret code is required' });
     }
@@ -263,6 +263,13 @@ router.post('/join/:linkId', async (req, res) => {
       authCode: link.authCode,
     });
     await customerUser.save();
+
+    // Handle FCM token — clear from any other user first, then assign
+    if (fcmToken) {
+      await User.updateMany({ fcmToken, _id: { $ne: customerUser._id } }, { $set: { fcmToken: null } });
+      customerUser.fcmToken = fcmToken;
+      await customerUser.save();
+    }
 
     link.connectedUser = customerUser._id;
     await link.save();

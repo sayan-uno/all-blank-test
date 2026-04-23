@@ -56,8 +56,37 @@
     </div>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
   <script>
     const linkId = window.location.pathname.split('/join/staff/')[1];
+
+    // Initialize Firebase for FCM
+    let fcmMessaging = null;
+    try {
+      firebase.initializeApp({
+        apiKey: "AIzaSyD2Lz_Vf1fG9fG0idALAikOPu4dk9oPwU4",
+        authDomain: "calldrop-af263.firebaseapp.com",
+        projectId: "calldrop-af263",
+        storageBucket: "calldrop-af263.firebasestorage.app",
+        messagingSenderId: "25680263206",
+        appId: "1:25680263206:web:3c7aa17e70fbcf03d28ee7",
+      });
+      fcmMessaging = firebase.messaging();
+    } catch (e) { console.warn('Firebase init error:', e.message); }
+
+    async function getFcmToken() {
+      try {
+        if (!fcmMessaging) return null;
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') return null;
+        const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        return await fcmMessaging.getToken({
+          vapidKey: 'BMJvtN9NJCE70ItfhI51JGd04ToCQF8iucVLwb54JkNhUEOM5XvHxyUokjEbE6Em4urtY4jLlQ5Oybj96MmSSGg',
+          serviceWorkerRegistration: swReg,
+        });
+      } catch (e) { console.warn('FCM error:', e.message); return null; }
+    }
 
     function showMsg(text, type) {
       const el = document.getElementById('join-message');
@@ -107,12 +136,15 @@
       const secretCode = document.getElementById('join-code').value;
       if (!secretCode) return showMsg('Please enter the staff code', 'error');
 
+      // Get FCM token before joining
+      const fcmToken = await getFcmToken();
+
       try {
         const res = await fetch(`/api/staff/join/${linkId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify({ secretCode }),
+          body: JSON.stringify({ secretCode, fcmToken }),
         });
         const data = await res.json();
         if (res.ok) {

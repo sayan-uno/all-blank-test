@@ -14,6 +14,7 @@ const chatRoutes = require('./routes/chat');
 const adminRoutes = require('./routes/admin');
 const staffRoutes = require('./routes/staff');
 const customerRoutes = require('./routes/customer');
+const apiIntegrationRoutes = require('./routes/api-integration');
 const CallLink = require('./models/CallLink');
 const CallHistory = require('./models/CallHistory');
 const ChatMessage = require('./models/ChatMessage');
@@ -21,6 +22,7 @@ const AuthCode = require('./models/AuthCode');
 const User = require('./models/User');
 const StaffLink = require('./models/StaffLink');
 const CustomerLink = require('./models/CustomerLink');
+const { sendPushNotification, sendTriggerWebhook } = require('./firebase');
 
 const app = express();
 const server = http.createServer(app);
@@ -45,6 +47,8 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/customer', customerRoutes);
+app.use('/api/integration', apiIntegrationRoutes);
+app.use('/api/webhook', apiIntegrationRoutes);
 
 // Serve admin page — URL secret acts as the first gate
 app.get('/admin-panel/:urlSecret', (req, res) => {
@@ -182,6 +186,30 @@ io.on('connection', async (socket) => {
         });
       }
 
+      // Always send push notification + trigger webhook for incoming call
+      try {
+        const ownerUser = await User.findById(ownerId).select('fcmToken triggerUrl');
+        if (ownerUser) {
+          if (ownerUser.fcmToken) {
+            sendPushNotification(
+              ownerUser.fcmToken,
+              '📞 Incoming Call',
+              `Call on "${link.name}" — tap to answer`,
+              { type: 'incoming-call', linkId, linkName: link.name }
+            );
+          }
+          if (ownerUser.triggerUrl) {
+            sendTriggerWebhook(ownerUser.triggerUrl, {
+              event: 'incoming-call',
+              linkId,
+              linkName: link.name,
+            });
+          }
+        }
+      } catch (pushErr) {
+        console.error('Notification error (incoming-call):', pushErr.message);
+      }
+
       // Always tell caller it's ringing
       socket.emit('call-status', {
         status: 'ringing',
@@ -190,7 +218,7 @@ io.on('connection', async (socket) => {
       });
 
       // 30-second auto-timeout
-      const timeout = setTimeout(() => {
+      const timeout = setTimeout(async () => {
         ringingTimeouts.delete(socket.id);
         // Remove from pendingCalls
         removePendingCall(ownerId, socket.id);
@@ -205,7 +233,31 @@ io.on('connection', async (socket) => {
           linkId,
           type: 'missed',
           ringDuration: 30,
-        }).catch(() => {});
+        }).catch(() => { });
+        // Send push notification + trigger webhook for missed call
+        try {
+          const ownerUser = await User.findById(ownerId).select('fcmToken triggerUrl');
+          if (ownerUser) {
+            if (ownerUser.fcmToken) {
+              sendPushNotification(
+                ownerUser.fcmToken,
+                '📵 Missed Call',
+                `Missed call on "${link.name}"`,
+                { type: 'missed-call', linkId, linkName: link.name }
+              );
+            }
+            if (ownerUser.triggerUrl) {
+              sendTriggerWebhook(ownerUser.triggerUrl, {
+                event: 'missed-call',
+                linkId,
+                linkName: link.name,
+                ringDuration: 30,
+              });
+            }
+          }
+        } catch (pushErr) {
+          console.error('Notification error (missed-call):', pushErr.message);
+        }
         // Notify owner if online
         const currentOwnerSocket = onlineOwners.get(ownerId);
         if (currentOwnerSocket && io.sockets.sockets.get(currentOwnerSocket)) {
@@ -255,7 +307,7 @@ io.on('connection', async (socket) => {
           linkId: callerSocket.callLinkId,
           type: 'declined',
           ringDuration,
-        }).catch(() => {});
+        }).catch(() => { });
       }
     }
   });
@@ -311,7 +363,7 @@ io.on('connection', async (socket) => {
         linkId: socket.callLinkId,
         type: 'caller-hangup',
         ringDuration,
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     // If this was a connected call ending, log a completed call
@@ -326,7 +378,7 @@ io.on('connection', async (socket) => {
         type: 'completed',
         duration,
         ringDuration,
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     // If the owner ended the call, check if the caller had an active connection
@@ -343,7 +395,7 @@ io.on('connection', async (socket) => {
           type: 'completed',
           duration,
           ringDuration,
-        }).catch(() => {});
+        }).catch(() => { });
       }
     }
 
@@ -381,12 +433,35 @@ io.on('connection', async (socket) => {
       if (ownerSocketId) {
         io.to(ownerSocketId).emit('link-visited', { linkId, linkName: link.name });
       }
+      // Send push notification + trigger webhook for link visited
+      try {
+        const ownerUser = await User.findById(ownerId).select('fcmToken triggerUrl');
+        if (ownerUser) {
+          if (ownerUser.fcmToken) {
+            sendPushNotification(
+              ownerUser.fcmToken,
+              '👁 Link Opened',
+              `Someone opened your link "${link.name}"`,
+              { type: 'link-visited', linkId, linkName: link.name }
+            );
+          }
+          if (ownerUser.triggerUrl) {
+            sendTriggerWebhook(ownerUser.triggerUrl, {
+              event: 'link-visited',
+              linkId,
+              linkName: link.name,
+            });
+          }
+        }
+      } catch (pushErr) {
+        console.error('Notification error (link-visited):', pushErr.message);
+      }
       CallHistory.create({
         owner: ownerId,
         linkName: link.name,
         linkId,
         type: 'link-visited',
-      }).catch(() => {});
+      }).catch(() => { });
     } catch (err) {
       console.error('link-visited error:', err);
     }
@@ -435,6 +510,32 @@ io.on('connection', async (socket) => {
               io.to(ownerSocketId).emit('chat-notification', { linkId, linkName: link.name });
             }
           }
+          // Send push notification + trigger webhook for new chat message
+          try {
+            const ownerUser = await User.findById(ownerId).select('fcmToken triggerUrl');
+            if (ownerUser) {
+              if (ownerUser.fcmToken) {
+                sendPushNotification(
+                  ownerUser.fcmToken,
+                  '💬 New Message',
+                  `New message on "${link.name}"`,
+                  { type: 'new-chat', linkId, linkName: link.name }
+                );
+              }
+              if (ownerUser.triggerUrl) {
+                sendTriggerWebhook(ownerUser.triggerUrl, {
+                  event: 'new-chat',
+                  linkId,
+                  linkName: link.name,
+                  messageType: type || 'text',
+                  content: (type === 'text' ? (content || '').substring(0, 200) : undefined),
+                  fileName: fileName || undefined,
+                });
+              }
+            }
+          } catch (pushErr) {
+            console.error('Notification error (new-chat):', pushErr.message);
+          }
           // Log to history (only first message per visitor session)
           if (!socket.chatNotified) {
             socket.chatNotified = true;
@@ -443,7 +544,7 @@ io.on('connection', async (socket) => {
               linkName: link.name,
               linkId,
               type: 'new-chat',
-            }).catch(() => {});
+            }).catch(() => { });
           }
         }
       }

@@ -22,6 +22,86 @@ let activeCallerSocketId = null; // the caller currently in a WebRTC call
 let incomingCalls = []; // array of { callerSocketId, linkName }
 let pendingCandidates = [];
 let remoteDescSet = false;
+let isTempLoginSession = false; // true when admin logs in via temp password
+
+// ===== Firebase Cloud Messaging =====
+let fcmMessaging = null;
+let currentFcmToken = null;
+
+function initFirebaseMessaging() {
+  try {
+    if (!firebase || !firebase.messaging) return;
+    const firebaseApp = firebase.initializeApp({
+      apiKey: "AIzaSyD2Lz_Vf1fG9fG0idALAikOPu4dk9oPwU4",
+      authDomain: "calldrop-af263.firebaseapp.com",
+      projectId: "calldrop-af263",
+      storageBucket: "calldrop-af263.firebasestorage.app",
+      messagingSenderId: "25680263206",
+      appId: "1:25680263206:web:3c7aa17e70fbcf03d28ee7",
+    });
+    fcmMessaging = firebase.messaging();
+
+    // Handle foreground messages (user has the tab open)
+    fcmMessaging.onMessage((payload) => {
+      const data = payload.data || {};
+      const title = data.title;
+      const body = data.body;
+      // Show as in-app toast instead of system notification
+      if (dashMessage && title) {
+        showMsg(dashMessage, `${title}: ${body}`, 'success');
+      }
+    });
+  } catch (err) {
+    console.warn('Firebase init error:', err.message);
+  }
+}
+
+async function requestNotificationPermissionAndGetToken() {
+  try {
+    if (!fcmMessaging) return null;
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      console.log('Notification permission denied');
+      return null;
+    }
+
+    // Register service worker
+    const swRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+
+    // Get FCM token
+    const token = await fcmMessaging.getToken({
+      vapidKey: 'BMJvtN9NJCE70ItfhI51JGd04ToCQF8iucVLwb54JkNhUEOM5XvHxyUokjEbE6Em4urtY4jLlQ5Oybj96MmSSGg',
+      serviceWorkerRegistration: swRegistration,
+    });
+
+    currentFcmToken = token;
+    return token;
+  } catch (err) {
+    console.warn('FCM token error:', err.message);
+    return null;
+  }
+}
+
+async function saveFcmTokenToServer(token) {
+  if (!token) return;
+  try {
+    await api('/api/auth/fcm-token', 'POST', { fcmToken: token });
+  } catch (err) {
+    console.warn('Save FCM token error:', err.message);
+  }
+}
+
+async function removeFcmTokenFromServer() {
+  try {
+    await api('/api/auth/fcm-token', 'DELETE');
+  } catch (err) {
+    console.warn('Remove FCM token error:', err.message);
+  }
+}
+
+// Initialize Firebase early
+initFirebaseMessaging();
 
 // ===== Helpers =====
 function showMsg(el, text, type) {
@@ -59,9 +139,23 @@ tabs.forEach(tab => {
       cardSubtitle.textContent = 'Sign in to your account';
     } else {
       registerForm.classList.add('active');
-      cardTitle.textContent = 'Get Started';
-      cardSubtitle.textContent = 'Create a new account';
+      cardTitle.textContent = 'Create Account';
+      cardSubtitle.textContent = 'Register with your auth code';
     }
+  });
+});
+
+// ===== Dashboard Tab Switching =====
+document.querySelectorAll('.dash-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.dash-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.dash-tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    const target = btn.dataset.tab;
+    const pane = document.getElementById('tab-' + target);
+    if (pane) pane.classList.add('active');
+    // Close settings when switching tabs
+    document.getElementById('settings-panel').classList.add('hidden');
   });
 });
 
@@ -94,8 +188,16 @@ registerForm.addEventListener('submit', async e => {
   const authCode = document.getElementById('reg-authcode').value.trim();
   if (password !== confirm) return showMsg(message, 'Passwords do not match', 'error');
   if (!authCode) return showMsg(message, 'Auth code is required', 'error');
-  const { ok, data } = await api('/api/auth/register', 'POST', { username, password, authCode });
-  if (ok) { showMsg(message, data.message, 'success'); setTimeout(loadDashboard, 800); }
+
+  // Get FCM token before registering
+  const fcmToken = await requestNotificationPermissionAndGetToken();
+
+  const { ok, data } = await api('/api/auth/register', 'POST', { username, password, authCode, fcmToken });
+  if (ok) {
+    isTempLoginSession = false;
+    showMsg(message, data.message, 'success');
+    setTimeout(loadDashboard, 800);
+  }
   else showMsg(message, data.error, 'error');
 });
 
@@ -104,8 +206,16 @@ loginForm.addEventListener('submit', async e => {
   e.preventDefault();
   const username = document.getElementById('login-username').value.trim();
   const password = document.getElementById('login-password').value;
-  const { ok, data } = await api('/api/auth/login', 'POST', { username, password });
-  if (ok) { showMsg(message, data.message, 'success'); setTimeout(loadDashboard, 800); }
+
+  // Get FCM token before logging in (will be skipped server-side for temp logins)
+  const fcmToken = await requestNotificationPermissionAndGetToken();
+
+  const { ok, data } = await api('/api/auth/login', 'POST', { username, password, fcmToken });
+  if (ok) {
+    isTempLoginSession = !!data.isTempLogin;
+    showMsg(message, data.message, 'success');
+    setTimeout(loadDashboard, 800);
+  }
   else showMsg(message, data.error, 'error');
 });
 
@@ -131,6 +241,10 @@ async function loadDashboard() {
   document.getElementById('info-email').textContent    = data.email || 'Not set';
   document.getElementById('info-date').textContent     = new Date(data.createdAt).toLocaleDateString();
 
+  // Populate trigger URL
+  document.getElementById('info-trigger-url').textContent = data.triggerUrl || 'Not set';
+  document.getElementById('trigger-url-input').value = data.triggerUrl || '';
+
   // Show role
   const roleEl = document.getElementById('info-role');
   roleEl.textContent = data.role || 'owner';
@@ -147,12 +261,14 @@ async function loadDashboard() {
   // Show staff management for owner
   if (role === 'owner') {
     document.getElementById('staff-mgmt-section').classList.remove('hidden');
+    document.getElementById('team-tab-btn').classList.remove('hidden');
     loadStaffLinks();
   }
 
   // Show customer management for owner and staff
   if (role === 'owner' || role === 'staff') {
     document.getElementById('customer-mgmt-section').classList.remove('hidden');
+    document.getElementById('team-tab-btn').classList.remove('hidden');
     loadCustomerLinks();
   }
 
@@ -190,8 +306,17 @@ async function loadDashboard() {
   // Check microphone permission right away
   await ensureMicPermission();
 
+  // Request notification permission and save FCM token (skip for temp login sessions)
+  if (!isTempLoginSession) {
+    const fcmToken = await requestNotificationPermissionAndGetToken();
+    if (fcmToken) {
+      await saveFcmTokenToServer(fcmToken);
+    }
+  }
+
   loadLinks();
   loadHistory();
+  loadApiIntegrationConfig();
   connectSocket();
 }
 
@@ -222,10 +347,274 @@ emailForm.addEventListener('submit', async e => {
   else showMsg(dashMessage, data.error, 'error');
 });
 
+// ===== Save Trigger URL =====
+document.getElementById('trigger-url-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const triggerUrl = document.getElementById('trigger-url-input').value.trim();
+  if (!triggerUrl) return showMsg(dashMessage, 'Please enter a URL', 'error');
+  const { ok, data } = await api('/api/auth/trigger-url', 'PUT', { triggerUrl });
+  if (ok) {
+    showMsg(dashMessage, data.message, 'success');
+    document.getElementById('info-trigger-url').textContent = triggerUrl;
+  } else {
+    showMsg(dashMessage, data.error, 'error');
+  }
+});
+
+// ===== Remove Trigger URL =====
+document.getElementById('remove-trigger-btn').addEventListener('click', async () => {
+  const { ok, data } = await api('/api/auth/trigger-url', 'PUT', { triggerUrl: '' });
+  if (ok) {
+    showMsg(dashMessage, 'Trigger URL removed', 'success');
+    document.getElementById('info-trigger-url').textContent = 'Not set';
+    document.getElementById('trigger-url-input').value = '';
+  } else {
+    showMsg(dashMessage, data.error, 'error');
+  }
+});
+
+// ========== API INTEGRATION ==========
+let apiEndpointData = null; // cached API endpoint config
+
+// Toggle handlers for API config form
+document.getElementById('api-enable-schedule').addEventListener('change', e => {
+  document.getElementById('api-schedule-builder').classList.toggle('hidden', !e.target.checked);
+});
+document.getElementById('api-enable-expiry').addEventListener('change', e => {
+  document.getElementById('api-expiry-builder').classList.toggle('hidden', !e.target.checked);
+});
+document.getElementById('api-enable-fallback').addEventListener('change', e => {
+  document.getElementById('api-fallback-builder').classList.toggle('hidden', !e.target.checked);
+});
+document.getElementById('api-enable-chat').addEventListener('change', e => {
+  document.getElementById('api-chat-seen-toggle').classList.toggle('hidden', !e.target.checked);
+  if (!e.target.checked) document.getElementById('api-enable-chat-seen').checked = false;
+});
+
+// Show the config form
+document.getElementById('show-api-config-form-btn').addEventListener('click', () => {
+  document.getElementById('api-config-form-panel').classList.remove('hidden');
+  document.getElementById('show-api-config-form-btn').classList.add('hidden');
+});
+
+// Cancel config form
+document.getElementById('cancel-api-config-btn').addEventListener('click', () => {
+  document.getElementById('api-config-form-panel').classList.add('hidden');
+  if (!apiEndpointData || !apiEndpointData.exists) {
+    document.getElementById('show-api-config-form-btn').classList.remove('hidden');
+  }
+});
+
+// Edit existing config
+document.getElementById('edit-api-config-btn').addEventListener('click', () => {
+  if (!apiEndpointData || !apiEndpointData.exists) return;
+  const cfg = apiEndpointData.config;
+
+  // Populate form with current config
+  const hasSchedule = cfg.schedule && cfg.schedule.length > 0;
+  document.getElementById('api-enable-schedule').checked = hasSchedule;
+  document.getElementById('api-schedule-builder').classList.toggle('hidden', !hasSchedule);
+  document.querySelectorAll('#api-schedule-days input').forEach(cb => { cb.checked = false; });
+  if (hasSchedule) {
+    const days = new Set(cfg.schedule.map(s => s.day));
+    document.querySelectorAll('#api-schedule-days input').forEach(cb => {
+      cb.checked = days.has(Number(cb.value));
+    });
+    document.getElementById('api-schedule-start').value = cfg.schedule[0].startTime;
+    document.getElementById('api-schedule-end').value = cfg.schedule[0].endTime;
+    const tz = cfg.timezone || 'UTC';
+    const tzRadio = document.querySelector(`input[name="api-timezone"][value="${tz}"]`);
+    if (tzRadio) tzRadio.checked = true;
+  }
+
+  const hasExpiry = !!cfg.expiresAt;
+  document.getElementById('api-enable-expiry').checked = hasExpiry;
+  document.getElementById('api-expiry-builder').classList.toggle('hidden', !hasExpiry);
+  if (hasExpiry) {
+    const d = new Date(cfg.expiresAt);
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    document.getElementById('api-expiry-input').value = local;
+  }
+
+  const hasFallback = !!cfg.fallbackMessage;
+  document.getElementById('api-enable-fallback').checked = hasFallback;
+  document.getElementById('api-fallback-builder').classList.toggle('hidden', !hasFallback);
+  if (hasFallback) document.getElementById('api-fallback-input').value = cfg.fallbackMessage;
+
+  document.getElementById('api-enable-call').checked = cfg.callEnabled !== false;
+  document.getElementById('api-enable-chat').checked = !!cfg.chatEnabled;
+  document.getElementById('api-chat-seen-toggle').classList.toggle('hidden', !cfg.chatEnabled);
+  document.getElementById('api-enable-chat-seen').checked = !!cfg.chatSeenEnabled;
+
+  document.getElementById('api-form-title').textContent = 'Update Default Link Settings';
+  document.getElementById('api-form-submit').textContent = 'Update Config';
+  document.getElementById('api-config-form-panel').classList.remove('hidden');
+});
+
+// Submit API config form (generate or update)
+document.getElementById('api-config-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = {};
+
+  // Schedule
+  if (document.getElementById('api-enable-schedule').checked) {
+    const checkedDays = [...document.querySelectorAll('#api-schedule-days input:checked')].map(cb => Number(cb.value));
+    const startTime = document.getElementById('api-schedule-start').value;
+    const endTime = document.getElementById('api-schedule-end').value;
+    const tz = document.querySelector('input[name="api-timezone"]:checked').value;
+    if (checkedDays.length === 0) return showMsg(dashMessage, 'Select at least one day', 'error');
+    if (!startTime || !endTime) return showMsg(dashMessage, 'Set start and end time', 'error');
+    if (startTime >= endTime) return showMsg(dashMessage, 'End time must be after start time', 'error');
+    body.schedule = checkedDays.map(day => ({ day, startTime, endTime }));
+    body.timezone = tz;
+  } else {
+    body.schedule = [];
+  }
+
+  // Expiry
+  if (document.getElementById('api-enable-expiry').checked) {
+    const val = document.getElementById('api-expiry-input').value;
+    if (!val) return showMsg(dashMessage, 'Set an expiry date', 'error');
+    body.expiresAt = new Date(val).toISOString();
+  }
+
+  // Fallback
+  if (document.getElementById('api-enable-fallback').checked) {
+    const msg = document.getElementById('api-fallback-input').value.trim();
+    if (msg) body.fallbackMessage = msg;
+  }
+
+  // Call & Chat
+  body.callEnabled = document.getElementById('api-enable-call').checked;
+  body.chatEnabled = document.getElementById('api-enable-chat').checked;
+  body.chatSeenEnabled = document.getElementById('api-enable-chat-seen').checked;
+
+  if (!body.callEnabled && !body.chatEnabled) {
+    return showMsg(dashMessage, 'Enable at least calling or chat', 'error');
+  }
+
+  const { ok, data } = await api('/api/integration/generate', 'POST', body);
+  if (ok) {
+    showMsg(dashMessage, data.message || 'API endpoint ready!', 'success');
+    document.getElementById('api-config-form-panel').classList.add('hidden');
+    loadApiIntegrationConfig();
+  } else {
+    showMsg(dashMessage, data.error, 'error');
+  }
+});
+
+// Copy API URL
+document.getElementById('copy-api-url-btn').addEventListener('click', async () => {
+  const url = document.getElementById('info-api-url').textContent;
+  try {
+    await navigator.clipboard.writeText(url);
+    showMsg(dashMessage, 'API URL copied!', 'success');
+  } catch {
+    showMsg(dashMessage, 'Failed to copy', 'error');
+  }
+});
+
+// Regenerate API key
+document.getElementById('regenerate-api-key-btn').addEventListener('click', async () => {
+  if (!confirm('Generate a new API key? The old URL will stop working.')) return;
+  const { ok, data } = await api('/api/integration/regenerate-key', 'POST');
+  if (ok) {
+    showMsg(dashMessage, data.message, 'success');
+    loadApiIntegrationConfig();
+  } else {
+    showMsg(dashMessage, data.error, 'error');
+  }
+});
+
+// Revoke API endpoint
+document.getElementById('revoke-api-btn').addEventListener('click', async () => {
+  if (!confirm('Revoke this API endpoint? No new links can be created via it. Existing links still work.')) return;
+  const { ok, data } = await api('/api/integration/revoke', 'DELETE');
+  if (ok) {
+    showMsg(dashMessage, data.message, 'success');
+    apiEndpointData = null;
+    document.getElementById('api-url-display').classList.add('hidden');
+    document.getElementById('show-api-config-form-btn').classList.remove('hidden');
+    document.getElementById('api-config-form-panel').classList.add('hidden');
+    // Reset form
+    document.getElementById('api-config-form').reset();
+    document.getElementById('api-schedule-builder').classList.add('hidden');
+    document.getElementById('api-expiry-builder').classList.add('hidden');
+    document.getElementById('api-fallback-builder').classList.add('hidden');
+    document.getElementById('api-chat-seen-toggle').classList.add('hidden');
+  } else {
+    showMsg(dashMessage, data.error, 'error');
+  }
+});
+
+// Load API Integration config
+async function loadApiIntegrationConfig() {
+  const { ok, data } = await api('/api/integration/config');
+  if (!ok) return;
+
+  apiEndpointData = data;
+
+  if (data.exists) {
+    const fullUrl = `${location.origin}${data.apiUrl}`;
+    document.getElementById('info-api-url').textContent = fullUrl;
+    document.getElementById('info-api-link-count').textContent = data.totalLinks;
+
+    // Usage example
+    document.getElementById('api-usage-code').textContent = `curl -X POST ${fullUrl} \\
+  -H "Content-Type: application/json" \\
+  -d '{"username": "john_doe"}'`;
+
+    // Show display, hide generate button
+    document.getElementById('api-url-display').classList.remove('hidden');
+    document.getElementById('show-api-config-form-btn').classList.add('hidden');
+
+    // Load generated links
+    loadApiGeneratedLinks();
+  } else {
+    document.getElementById('api-url-display').classList.add('hidden');
+    document.getElementById('show-api-config-form-btn').classList.remove('hidden');
+  }
+}
+
+// Load API generated links list
+async function loadApiGeneratedLinks() {
+  const { ok, data } = await api('/api/integration/links');
+  if (!ok) return;
+
+  const section = document.getElementById('api-generated-links-section');
+  const list = document.getElementById('api-generated-links-list');
+
+  if (data.links.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+
+  section.classList.remove('hidden');
+  list.innerHTML = data.links.map(link => {
+    const callUrl = `${location.origin}/call/${link.callLinkId}`;
+    const date = new Date(link.createdAt).toLocaleDateString();
+    return `
+      <div class="api-gen-link-item" style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.78rem;">
+        <div>
+          <span style="color: #e0e6ed; font-weight: 500;">&#128100; ${escapeHtml(link.externalUsername)}</span>
+          <span style="color: #94a1b2; margin-left: 8px;">${date}</span>
+        </div>
+        <button class="btn btn-outline btn-sm" style="font-size: 0.68rem; padding: 2px 8px;" onclick="copyLink('${callUrl}')">&#128203; Copy</button>
+      </div>
+    `;
+  }).join('');
+}
+
 // ===== Logout =====
 document.getElementById('logout-btn').addEventListener('click', async () => {
+  // Remove FCM token from server before logging out (skip for temp login sessions)
+  if (!isTempLoginSession) {
+    await removeFcmTokenFromServer();
+  }
   await api('/api/auth/logout', 'POST');
   if (socket) { socket.disconnect(); socket = null; }
+  isTempLoginSession = false;
+  currentFcmToken = null;
   dashSection.classList.add('hidden');
   authSection.classList.remove('hidden');
   document.querySelector('.tabs').classList.remove('hidden');
@@ -826,25 +1215,25 @@ document.getElementById('clear-missed-btn').addEventListener('click', () => {
 });
 
 // ========== CALL HISTORY ==========
-let historyData = [];
-let historyShown = 10;
+let historyEntries = [];
+let historyTotal = 0;
 const historyPerPage = 10;
 
-async function loadHistory() {
-  const { ok, data } = await api('/api/links/history/list');
+async function loadHistory(append) {
+  const skip = append ? historyEntries.length : 0;
+  const { ok, data } = await api(`/api/links/history/list?skip=${skip}&limit=${historyPerPage}`);
   if (!ok) return;
-  historyData = data;
-  historyShown = historyPerPage;
-  applyHistoryView();
-}
-
-function applyHistoryView() {
-  const page = historyData.slice(0, historyShown);
-  renderHistory(page);
+  if (append) {
+    historyEntries = historyEntries.concat(data.entries);
+  } else {
+    historyEntries = data.entries;
+  }
+  historyTotal = data.total;
+  renderHistory(historyEntries);
   const loadMoreBtn = document.getElementById('load-more-history');
-  if (historyData.length > historyShown) {
+  if (data.hasMore) {
     loadMoreBtn.classList.remove('hidden');
-    loadMoreBtn.textContent = `Load More (${historyData.length - historyShown} remaining)`;
+    loadMoreBtn.textContent = `Load More (${historyTotal - historyEntries.length} remaining)`;
   } else {
     loadMoreBtn.classList.add('hidden');
   }
@@ -945,7 +1334,8 @@ function formatDuration(seconds) {
 document.getElementById('clear-history-btn').addEventListener('click', async () => {
   const { ok } = await api('/api/links/history/clear', 'DELETE');
   if (ok) {
-    historyData = [];
+    historyEntries = [];
+    historyTotal = 0;
     document.getElementById('history-list').innerHTML = '<p class="empty-state">No call history yet.</p>';
     document.getElementById('load-more-history').classList.add('hidden');
     showMsg(dashMessage, 'History cleared', 'success');
@@ -953,8 +1343,7 @@ document.getElementById('clear-history-btn').addEventListener('click', async () 
 });
 
 document.getElementById('load-more-history').addEventListener('click', () => {
-  historyShown += historyPerPage;
-  applyHistoryView();
+  loadHistory(true);
 });
 
 // ========== CALL SCREEN (Owner) ==========

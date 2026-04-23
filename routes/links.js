@@ -312,10 +312,22 @@ router.delete('/:linkId', authenticateToken, requireAuthCode, async (req, res) =
 // Get call history for current user (must be before /:linkId routes)
 router.get('/history/list', authenticateToken, requireAuthCode, async (req, res) => {
   try {
-    const history = await CallHistory.find({ owner: req.userId })
-      .sort({ time: -1 })
-      .limit(100);
-    res.json(history);
+    const skip = parseInt(req.query.skip) || 0;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const [entries, total] = await Promise.all([
+      CallHistory.find({ owner: req.userId })
+        .sort({ time: -1 })
+        .skip(skip)
+        .limit(limit),
+      CallHistory.countDocuments({ owner: req.userId }),
+    ]);
+
+    res.json({
+      entries,
+      total,
+      hasMore: skip + limit < total,
+    });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
