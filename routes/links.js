@@ -315,12 +315,17 @@ router.get('/history/list', authenticateToken, requireAuthCode, async (req, res)
     const skip = parseInt(req.query.skip) || 0;
     const limit = parseInt(req.query.limit) || 10;
 
+    const query = { owner: req.userId };
+    if (req.query.q) {
+      query.linkName = { $regex: req.query.q, $options: 'i' };
+    }
+
     const [entries, total] = await Promise.all([
-      CallHistory.find({ owner: req.userId })
+      CallHistory.find(query)
         .sort({ time: -1 })
         .skip(skip)
         .limit(limit),
-      CallHistory.countDocuments({ owner: req.userId }),
+      CallHistory.countDocuments(query),
     ]);
 
     res.json({

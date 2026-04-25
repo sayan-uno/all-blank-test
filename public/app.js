@@ -1219,9 +1219,36 @@ let historyEntries = [];
 let historyTotal = 0;
 const historyPerPage = 10;
 
+let historySearchQuery = '';
+let historySearchTimeout;
+
+const historySearchInput = document.getElementById('history-search-input');
+const historySearchClearBtn = document.getElementById('history-search-clear-btn');
+
+if (historySearchInput) {
+  historySearchInput.addEventListener('input', (e) => {
+    historySearchQuery = e.target.value.trim();
+    if (historySearchQuery) historySearchClearBtn.classList.remove('hidden');
+    else historySearchClearBtn.classList.add('hidden');
+    
+    clearTimeout(historySearchTimeout);
+    historySearchTimeout = setTimeout(() => {
+      loadHistory(false);
+    }, 400);
+  });
+
+  historySearchClearBtn.addEventListener('click', () => {
+    historySearchInput.value = '';
+    historySearchQuery = '';
+    historySearchClearBtn.classList.add('hidden');
+    loadHistory(false);
+  });
+}
+
 async function loadHistory(append) {
   const skip = append ? historyEntries.length : 0;
-  const { ok, data } = await api(`/api/links/history/list?skip=${skip}&limit=${historyPerPage}`);
+  const qParam = historySearchQuery ? `&q=${encodeURIComponent(historySearchQuery)}` : '';
+  const { ok, data } = await api(`/api/links/history/list?skip=${skip}&limit=${historyPerPage}${qParam}`);
   if (!ok) return;
   if (append) {
     historyEntries = historyEntries.concat(data.entries);

@@ -7,11 +7,7 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="bg-shapes">
-    <div class="shape shape-1"></div>
-    <div class="shape shape-2"></div>
-    <div class="shape shape-3"></div>
-  </div>
+  <div class="bg-shapes"></div>
 
   <!-- ========== AUTH CARD ========== -->
   <div id="auth-section" class="page-wrapper auth-wrapper">
@@ -457,6 +453,13 @@
             <h3 class="section-title">&#128214; Call History</h3>
             <button id="clear-history-btn" class="btn btn-outline btn-sm">Clear</button>
           </div>
+
+          <div class="search-bar" style="margin-top: 16px; margin-bottom: 24px;">
+            <span class="search-icon">&#128269;</span>
+            <input type="text" id="history-search-input" placeholder="Search by link name..." autocomplete="off" />
+            <button id="history-search-clear-btn" class="search-clear hidden" title="Clear">&times;</button>
+          </div>
+
           <div id="history-list" class="history-list">
             <p class="empty-state">No call history yet.</p>
           </div>
@@ -565,8 +568,8 @@
   </div>
 
   <!-- ========== IN-CALL SCREEN ========== -->
-  <div id="call-screen" class="container hidden">
-    <div class="card call-card">
+  <div id="call-screen" class="page-wrapper auth-wrapper hidden">
+    <div class="auth-box call-card" style="padding: 32px 24px;">
       <div class="call-status-bar">
         <span id="call-status-text">Connected</span>
         <span id="call-timer">00:00</span>
@@ -587,8 +590,8 @@
   </div>
 
   <!-- ========== OWNER CHAT PANEL (overlay) ========== -->
-  <div id="owner-chat-panel" class="container hidden">
-    <div class="card chat-card">
+  <div id="owner-chat-panel" class="page-wrapper auth-wrapper hidden" style="padding: 0;">
+    <div class="auth-box chat-card" style="max-width: 800px; padding: 0; height: 85vh;">
       <div class="chat-header">
         <button id="owner-chat-back-btn" class="chat-back-btn" title="Back">&#8592;</button>
         <h3 id="owner-chat-header-name">Chat</h3>

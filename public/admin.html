@@ -8,11 +8,7 @@
 
 </head>
 <body>
-  <div class="bg-shapes">
-    <div class="shape shape-1"></div>
-    <div class="shape shape-2"></div>
-    <div class="shape shape-3"></div>
-  </div>
+  <div class="bg-shapes"></div>
 
   <!-- Admin Login -->
   <div id="admin-login" class="page-wrapper auth-wrapper">
@@ -59,8 +55,8 @@
         </div>
 
         <!-- Global Search Results Container -->
-        <div id="global-search-results" class="code-list hidden" style="margin-bottom:32px; padding: 24px; border: 1px solid rgba(127,90,240,0.4); border-radius: 16px; background: rgba(127,90,240,0.05);">
-          <h3 class="section-title" style="margin-top:0; color:#b49af0; border:none; padding-bottom:0;">Matched Users</h3>
+        <div id="global-search-results" class="code-list hidden" style="margin-bottom:32px; padding: 24px; border: 1px solid rgba(255,255,255,0.2); border-radius: 16px; background: rgba(255,255,255,0.05);">
+          <h3 class="section-title" style="margin-top:0; color:#fff; border:none; padding-bottom:0;">Matched Users</h3>
           <div id="global-search-list"></div>
         </div>
 
@@ -218,11 +214,15 @@
         } else if (c.status === 'active') {
           actionBtn = `<button class="btn-block block" onclick="toggleBlock('${c._id}','blocked')">Block</button>`;
         }
-        
         actionBtn += ` <button class="btn-details" style="margin-left:5px;" onclick="toggleDetails('${c._id}')">Details</button>`;
 
         const verifiedHtml = c.verifiedName
-          ? `<span class="code-verified"><span class="blue-tick">&#10004;&#65039;</span> ${esc(c.verifiedName)}</span>`
+          ? `<span class="code-verified"><span class="blue-tick" style="display:inline-flex; align-items:center; vertical-align:middle; margin-right:4px;">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width: 16px; height: 16px;">
+                <path d="M10.52 1.84c.88-.63 2.08-.63 2.96 0l2.36 1.68c.38.27.87.42 1.35.42h2.89c1.07 0 1.94.87 1.94 1.94v2.89c0 .48.15.97.42 1.35l1.68 2.36c.63.88.63 2.08 0 2.96l-1.68 2.36c-.27.38-.42.87-.42 1.35v2.89c0 1.07-.87 1.94-1.94 1.94h-2.89c-.48 0-.97.15-1.35.42l-2.36 1.68c-.88.63-2.08.63-2.96 0l-2.36-1.68c-.38-.27-.87-.42-1.35-.42H4.97c-1.07 0-1.94-.87-1.94-1.94v-2.89c0-.48-.15-.97-.42-1.35l-1.68-2.36c-.63-.88-.63-2.08 0-2.96l1.68-2.36c.27-.38.42-.87.42-1.35V4.97c0-1.07.87-1.94 1.94-1.94h2.89c.48 0 .97-.15 1.35-.42l2.36-1.68z" fill="#0095F6"/>
+                <path d="M10.1 16.5l-3.4-3.4 1.4-1.4 2 2 5.6-5.6 1.4 1.4-7 7z" fill="#fff"/>
+              </svg>
+            </span> ${esc(c.verifiedName)}</span>`
           : '';
 
         const deleteBadge = c.allowDelete
@@ -412,8 +412,8 @@
         return `
           <div class="user-row ${indentClass}">
             <div>
-              <span style="color:#e0e0e0; font-weight:600;">${esc(user.username)}</span>
-              <span style="color:#94a1b2; font-size:0.75rem; margin-left:6px;">(${label})</span>
+              <span style="color:#fff; font-weight:600;">${esc(user.username)}</span>
+              <span style="color:rgba(255,255,255,0.5); font-size:0.75rem; margin-left:6px;">(${label})</span>
             </div>
             <div>
               <button class="btn-temp-login" onclick="generateTempPassword('${user._id}', '${esc(user.username)}')">&#128273; Temp Login</button>
@@ -427,7 +427,7 @@
       } else {
         html += '<div class="hierarchy-section">';
         html += `<div class="hierarchy-title">Structure Counts</div>`;
-        html += `<div style="font-size:0.85rem; color:#94a1b2; margin-bottom:12px;">Total: <strong>${data.counts.owner}</strong> Owner, <strong>${data.counts.staff}</strong> Staff, <strong>${data.counts.customer}</strong> Customers</div>`;
+        html += `<div style="font-size:0.85rem; color:rgba(255,255,255,0.6); margin-bottom:12px;">Total: <strong>${data.counts.owner}</strong> Owner, <strong>${data.counts.staff}</strong> Staff, <strong>${data.counts.customer}</strong> Customers</div>`;
 
         html += '<div class="hierarchy-title">Owner Account</div>';
         html += renderUserRow(data.owner, 'Owner', '');
@@ -505,18 +505,18 @@
         globalSearchResults.classList.remove('hidden');
 
         globalSearchList.innerHTML = data.map(u => {
-          let roleColor = u.role === 'owner' ? '#7f5af0' : (u.role === 'staff' ? '#2cb67d' : '#94a1b2');
+          let roleColor = u.role === 'owner' ? '#fff' : (u.role === 'staff' ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.4)');
           let displayCode = u.verifiedName ? `${esc(u.codeValue)} (${esc(u.verifiedName)})` : esc(u.codeValue);
           return `
             <div class="user-row" style="border-left: 3px solid ${roleColor}; align-items: center;">
               <div style="flex:1;">
                 <div style="margin-bottom:4px;">
-                  <span style="color:#e0e0e0; font-weight:600; font-size:0.95rem;">${esc(u.username)}</span>
+                  <span style="color:#fff; font-weight:600; font-size:0.95rem;">${esc(u.username)}</span>
                   <span style="color:${roleColor}; font-size:0.75rem; margin-left:6px; text-transform:uppercase;">[${esc(u.role)}]</span>
                 </div>
-                <div style="font-size:0.75rem; color:#94a1b2;">
-                  Code: <strong style="color:#fffffe;">${displayCode}</strong> &bull; 
-                  Creator: <strong style="color:#fffffe;">${esc(u.creator)}</strong>
+                <div style="font-size:0.75rem; color:rgba(255,255,255,0.6);">
+                  Code: <strong style="color:#fff;">${displayCode}</strong> &bull; 
+                  Creator: <strong style="color:#fff;">${esc(u.creator)}</strong>
                 </div>
               </div>
               <div style="margin-left: 10px;">

@@ -7,15 +7,11 @@
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <div class="bg-shapes">
-    <div class="shape shape-1"></div>
-    <div class="shape shape-2"></div>
-    <div class="shape shape-3"></div>
-  </div>
+  <div class="bg-shapes"></div>
 
   <!-- Loading state -->
-  <div id="loading-section" class="container">
-    <div class="card">
+  <div id="loading-section" class="page-wrapper auth-wrapper">
+    <div class="auth-box">
       <div class="card-header">
         <h1>Loading...</h1>
         <p>Checking customer link</p>
@@ -24,8 +20,8 @@
   </div>
 
   <!-- Join form -->
-  <div id="join-section" class="container hidden">
-    <div class="card">
+  <div id="join-section" class="page-wrapper auth-wrapper hidden">
+    <div class="auth-box">
       <div class="card-header">
         <h1>&#128100; Join as Customer</h1>
         <p>Enter the code to activate your account</p>
@@ -46,8 +42,8 @@
   </div>
 
   <!-- Error / suspended / already joined states -->
-  <div id="error-section" class="container hidden">
-    <div class="card">
+  <div id="error-section" class="page-wrapper auth-wrapper hidden">
+    <div class="auth-box">
       <div class="card-header">
         <h1 id="error-title">Error</h1>
         <p id="error-msg">Something went wrong.</p>
