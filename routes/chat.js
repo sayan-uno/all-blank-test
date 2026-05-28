@@ -12,15 +12,7 @@ const { authenticateToken, requireAuthCode } = require('../middleware/auth');
 const router = express.Router();
 
 // Multer storage config
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, path.join(__dirname, '..', 'public', 'uploads'));
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${uuidv4().slice(0, 12)}${ext}`);
-  },
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -34,11 +26,30 @@ router.post('/:linkId/upload', upload.single('file'), async (req, res) => {
     if (!link || !link.chatEnabled) return res.status(404).json({ error: 'Chat not available' });
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-    const fileUrl = `/uploads/${req.file.filename}`;
-    res.json({
-      url: fileUrl,
-      fileName: req.file.originalname,
-      fileSize: req.file.size,
+    const bucket = req.app.locals.gridfsBucket;
+    if (!bucket) return res.status(500).json({ error: 'GridFS not ready' });
+
+    const ext = path.extname(req.file.originalname);
+    const filename = `${uuidv4().slice(0, 12)}${ext}`;
+
+    const uploadStream = bucket.openUploadStream(filename, {
+      contentType: req.file.mimetype
+    });
+    
+    uploadStream.end(req.file.buffer);
+
+    uploadStream.on('finish', () => {
+      const fileUrl = `/api/files/${filename}`;
+      res.json({
+        url: fileUrl,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+      });
+    });
+
+    uploadStream.on('error', (err) => {
+      console.error('GridFS Upload error:', err);
+      res.status(500).json({ error: 'Upload failed' });
     });
   } catch (err) {
     console.error('Upload error:', err);

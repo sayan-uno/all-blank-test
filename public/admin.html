@@ -67,6 +67,10 @@
             <input type="checkbox" id="generate-allow-delete" />
             <span>&#128274; Allow delete</span>
           </label>
+          <label class="delete-auth-toggle">
+            <input type="checkbox" id="generate-record-audio" checked />
+            <span>&#127908; Record Audio</span>
+          </label>
           <button id="generate-code-btn" class="btn btn-primary">&#43; Generate Auth Code</button>
         </div>
       </div>
@@ -236,10 +240,18 @@
           </div>
         `;
 
+        const resetKeyHtml = c.resetKey 
+          ? `<div style="font-size: 0.8rem; color: #7ee787; margin-top: 8px;">Reset Key: <strong>${esc(c.resetKey)}</strong> <button class="btn-name" style="margin-left: 8px;" onclick="generateResetKey('${c._id}')">Regenerate</button></div>`
+          : `<div style="font-size: 0.8rem; color: #94a1b2; margin-top: 8px;">No Reset Key <button class="btn-name" style="margin-left: 8px;" onclick="generateResetKey('${c._id}')">Generate</button></div>`;
+
         const deleteToggleHtml = `
           <label class="delete-auth-toggle" style="margin-top:4px;">
             <input type="checkbox" ${c.allowDelete ? 'checked' : ''} onchange="toggleDeleteAuth('${c._id}', this.checked)" />
             <span>Allow delete</span>
+          </label>
+          <label class="delete-auth-toggle" style="margin-top:4px;">
+            <input type="checkbox" ${c.recordAudio ? 'checked' : ''} onchange="toggleRecordAuth('${c._id}', this.checked)" />
+            <span>Record Audio</span>
           </label>
         `;
 
@@ -250,6 +262,7 @@
               <span class="code-meta">${dateStr}${userInfo}</span>
               ${verifiedHtml}
               ${nameEditHtml}
+              ${resetKeyHtml}
               ${deleteToggleHtml}
             </div>
             <div class="code-actions">
@@ -274,16 +287,18 @@
       try {
         const verifiedName = document.getElementById('generate-name-input').value.trim();
         const allowDelete = document.getElementById('generate-allow-delete').checked;
+        const recordAudio = document.getElementById('generate-record-audio').checked;
         const data = await adminFetch('/api/admin/generate-code', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ verifiedName: verifiedName || undefined, allowDelete }),
+          body: JSON.stringify({ verifiedName: verifiedName || undefined, allowDelete, recordAudio }),
         });
         if (!data) return;
         loadedCodes.unshift(data);
         renderCodes();
         document.getElementById('generate-name-input').value = '';
         document.getElementById('generate-allow-delete').checked = false;
+        document.getElementById('generate-record-audio').checked = true;
         showDashMsg('Auth code generated', 'success');
       } catch {
         showDashMsg('Failed to generate code', 'error');
@@ -335,6 +350,25 @@
       }
     }
 
+    // Generate / Regenerate Reset Key
+    async function generateResetKey(codeId) {
+      if (!confirm('Are you sure you want to generate a new reset key? This will invalidate any existing reset key for this auth code.')) return;
+      try {
+        const data = await adminFetch(`/api/admin/codes/${codeId}/reset-key`, {
+          method: 'POST'
+        });
+        if (!data) return;
+        const idx = loadedCodes.findIndex(c => c._id === codeId);
+        if (idx !== -1) {
+          loadedCodes[idx].resetKey = data.resetKey;
+          renderCodes();
+        }
+        showDashMsg(data.message, 'success');
+      } catch {
+        showDashMsg('Failed to generate reset key', 'error');
+      }
+    }
+
     // Copy code to clipboard
     function copyCode(el) {
       const text = el.textContent;
@@ -358,6 +392,26 @@
         showDashMsg(allowed ? 'Delete permission enabled' : 'Delete permission disabled', 'success');
       } catch {
         showDashMsg('Failed to update delete permission', 'error');
+      }
+    }
+
+    // Toggle record audio authorization
+    async function toggleRecordAuth(codeId, enabled) {
+      try {
+        const data = await adminFetch(`/api/admin/codes/${codeId}/record-auth`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recordAudio: enabled }),
+        });
+        if (!data) return;
+        const idx = loadedCodes.findIndex(c => c._id === codeId);
+        if (idx !== -1) {
+          loadedCodes[idx].recordAudio = enabled;
+          renderCodes();
+        }
+        showDashMsg(data.message, 'success');
+      } catch {
+        showDashMsg('Failed to update record permission', 'error');
       }
     }
 

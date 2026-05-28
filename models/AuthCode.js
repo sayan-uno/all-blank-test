@@ -26,6 +26,14 @@ const authCodeSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  recordAudio: {
+    type: Boolean,
+    default: true,
+  },
+  resetKey: {
+    type: String,
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

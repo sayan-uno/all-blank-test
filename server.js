@@ -50,6 +50,28 @@ app.use('/api/customer', customerRoutes);
 app.use('/api/integration', apiIntegrationRoutes);
 app.use('/api/webhook', apiIntegrationRoutes);
 
+// Serve files from GridFS
+app.get('/api/files/:filename', (req, res) => {
+  if (!app.locals.gridfsBucket) {
+    return res.status(500).json({ error: 'GridFS not initialized' });
+  }
+  const bucket = app.locals.gridfsBucket;
+  const downloadStream = bucket.openDownloadStreamByName(req.params.filename);
+  
+  downloadStream.on('error', () => {
+    return res.status(404).json({ error: 'File not found' });
+  });
+
+  const ext = path.extname(req.params.filename).toLowerCase();
+  if (ext === '.webm') res.set('Content-Type', 'audio/webm');
+  else if (ext === '.mp4') res.set('Content-Type', 'video/mp4');
+  else if (ext === '.png') res.set('Content-Type', 'image/png');
+  else if (ext === '.jpg' || ext === '.jpeg') res.set('Content-Type', 'image/jpeg');
+  else if (ext === '.pdf') res.set('Content-Type', 'application/pdf');
+
+  downloadStream.pipe(res);
+});
+
 // Serve admin page — URL secret acts as the first gate
 app.get('/admin-panel/:urlSecret', (req, res) => {
   if (!process.env.ADMIN_URL_SECRET || req.params.urlSecret !== process.env.ADMIN_URL_SECRET) {
@@ -86,11 +108,13 @@ app.locals.onlineOwners = onlineOwners;
 app.locals.io = io;
 // Track active calls: { callerSocketId: ownerSocketId } and reverse
 const callPairs = new Map();
+// Track active audio recording streams: { callSessionId: GridFSBucketWriteStream }
+const activeRecordings = new Map();
 // Track ringing timeouts: { callerSocketId: timeoutId }
 const ringingTimeouts = new Map();
 // Track missed calls in memory: { ownerId: [{ linkName, time }] }
 const missedCalls = new Map();
-// Track pending/ringing calls per owner: { ownerId: [{ callerSocketId, linkId, linkName, fallbackMessage }] }
+// Track pending/ringing calls per owner: { ownerId: [{ callerSocketId, linkId, linkName, fallbackMessage, recordEnabled }] }
 const pendingCalls = new Map();
 
 // Parse cookie string helper
@@ -135,6 +159,7 @@ io.on('connection', async (socket) => {
             linkId: call.linkId,
             linkName: call.linkName,
             callerSocketId: call.callerSocketId,
+            recordEnabled: call.recordEnabled,
           });
         }
       }
@@ -162,6 +187,7 @@ io.on('connection', async (socket) => {
       socket.callLinkName = link.name;
       socket.callFallbackMessage = link.fallbackMessage || '';
       socket.callStartedAt = Date.now();
+      socket.callRecordEnabled = link.recordEnabled !== false;
 
       // Store the caller→owner mapping for WebRTC routing
       if (ownerSocketId) {
@@ -175,6 +201,7 @@ io.on('connection', async (socket) => {
         linkId,
         linkName: link.name,
         fallbackMessage: link.fallbackMessage || '',
+        recordEnabled: socket.callRecordEnabled,
       });
 
       // Send incoming call to owner (if online)
@@ -183,6 +210,7 @@ io.on('connection', async (socket) => {
           linkId,
           linkName: link.name,
           callerSocketId: socket.id,
+          recordEnabled: socket.callRecordEnabled,
         });
       }
 
@@ -371,14 +399,18 @@ io.on('connection', async (socket) => {
       const duration = Math.round((Date.now() - socket.callConnectedAt) / 1000);
       const ringDuration = socket.callStartedAt && socket.callConnectedAt
         ? Math.round((socket.callConnectedAt - socket.callStartedAt) / 1000) : 0;
-      CallHistory.create({
+      const historyDoc = {
         owner: socket.callOwnerId,
         linkName: socket.callLinkName,
         linkId: socket.callLinkId,
         type: 'completed',
         duration,
         ringDuration,
-      }).catch(() => { });
+      };
+      if (socket.callRecordEnabled) {
+        historyDoc.audioUrl = `/api/files/call-${socket.id}.webm`;
+      }
+      CallHistory.create(historyDoc).catch(() => { });
     }
 
     // If the owner ended the call, check if the caller had an active connection
@@ -388,14 +420,18 @@ io.on('connection', async (socket) => {
         const duration = Math.round((Date.now() - callerSocket.callConnectedAt) / 1000);
         const ringDuration = callerSocket.callStartedAt && callerSocket.callConnectedAt
           ? Math.round((callerSocket.callConnectedAt - callerSocket.callStartedAt) / 1000) : 0;
-        CallHistory.create({
+        const historyDoc = {
           owner: callerSocket.callOwnerId,
           linkName: callerSocket.callLinkName,
           linkId: callerSocket.callLinkId,
           type: 'completed',
           duration,
           ringDuration,
-        }).catch(() => { });
+        };
+        if (callerSocket.callRecordEnabled) {
+          historyDoc.audioUrl = `/api/files/call-${resolvedTarget}.webm`;
+        }
+        CallHistory.create(historyDoc).catch(() => { });
       }
     }
 
@@ -420,6 +456,30 @@ io.on('connection', async (socket) => {
   socket.on('clear-missed-calls', () => {
     if (socket.userId) {
       missedCalls.delete(socket.userId);
+    }
+  });
+
+  // ===== Call Audio Recording =====
+  socket.on('call-audio-start', ({ callSessionId, mimeType }) => {
+    if (!app.locals.gridfsBucket) return;
+    const uploadStream = app.locals.gridfsBucket.openUploadStream(`call-${callSessionId}.webm`, {
+      contentType: mimeType || 'audio/webm'
+    });
+    activeRecordings.set(callSessionId, uploadStream);
+  });
+
+  socket.on('call-audio-chunk', ({ callSessionId, chunk }) => {
+    const stream = activeRecordings.get(callSessionId);
+    if (stream) {
+      stream.write(Buffer.from(chunk));
+    }
+  });
+
+  socket.on('call-audio-end', ({ callSessionId }) => {
+    const stream = activeRecordings.get(callSessionId);
+    if (stream) {
+      stream.end();
+      activeRecordings.delete(callSessionId);
     }
   });
 
@@ -632,6 +692,11 @@ mongoose
   .connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('Connected to MongoDB');
+    const bucket = new mongoose.mongo.GridFSBucket(mongoose.connection.db, {
+      bucketName: 'uploads'
+    });
+    app.locals.gridfsBucket = bucket;
+    
     server.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
   })
   .catch((err) => {

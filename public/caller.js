@@ -51,10 +51,17 @@ async function init() {
     }
 
     // Show pre-call screen with owner info
-    const avatarLetter = linkInfo.ownerUsername
-      ? linkInfo.ownerUsername[0].toUpperCase()
-      : (linkInfo.verifiedName ? linkInfo.verifiedName[0].toUpperCase() : '?');
-    document.getElementById('precall-avatar-letter').textContent = avatarLetter;
+    if (linkInfo.profilePicture) {
+      document.getElementById('precall-avatar-circle').classList.add('hidden');
+      const picEl = document.getElementById('precall-profile-pic');
+      picEl.src = linkInfo.profilePicture;
+      picEl.classList.remove('hidden');
+    } else {
+      const avatarLetter = linkInfo.ownerUsername
+        ? linkInfo.ownerUsername[0].toUpperCase()
+        : (linkInfo.verifiedName ? linkInfo.verifiedName[0].toUpperCase() : '?');
+      document.getElementById('precall-avatar-letter').textContent = avatarLetter;
+    }
 
     // If username is hidden, show verified name as the main name
     if (linkInfo.ownerUsername) {
@@ -133,7 +140,18 @@ document.getElementById('start-call-btn').addEventListener('click', async () => 
   // Setup calling screen
   peerNameEl.textContent = linkInfo.ownerUsername;
   peerSubEl.textContent = `Calling via "${linkInfo.name}"...`;
-  avatarLetter.textContent = linkInfo.ownerUsername[0].toUpperCase();
+  
+  if (linkInfo.profilePicture) {
+    document.getElementById('caller-avatar-circle').classList.add('hidden');
+    const cPic = document.getElementById('caller-profile-pic');
+    cPic.src = linkInfo.profilePicture;
+    cPic.classList.remove('hidden');
+    cPic.classList.add('ringing');
+  } else {
+    avatarLetter.textContent = linkInfo.ownerUsername[0].toUpperCase();
+    avatarCircle.classList.add('ringing');
+  }
+  
   statusText.textContent = 'Ringing...';
 
   connectAndCall();
@@ -177,6 +195,7 @@ function connectAndCall() {
     }
     countdownEl.textContent = '';
     avatarCircle.classList.remove('ringing');
+    document.getElementById('caller-profile-pic').classList.remove('ringing');
     showCallAgainBtn();
   });
 
@@ -185,6 +204,7 @@ function connectAndCall() {
     statusText.textContent = 'Connected';
     countdownEl.textContent = '';
     avatarCircle.classList.remove('ringing');
+    document.getElementById('caller-profile-pic').classList.remove('ringing');
     muteBtn.classList.remove('hidden');
     timerEl.classList.remove('hidden');
 
@@ -214,6 +234,7 @@ function connectAndCall() {
     }
     countdownEl.textContent = '';
     avatarCircle.classList.remove('ringing');
+    document.getElementById('caller-profile-pic').classList.remove('ringing');
     showCallAgainBtn();
   });
 
@@ -245,6 +266,7 @@ function connectAndCall() {
     peerSubEl.textContent = 'The call has been disconnected';
     countdownEl.textContent = '';
     avatarCircle.classList.remove('ringing');
+    document.getElementById('caller-profile-pic').classList.remove('ringing');
     muteBtn.classList.add('hidden');
     document.getElementById('caller-chat-toggle-btn').classList.add('hidden');
     chatCallBtn.classList.remove('hidden');
@@ -337,6 +359,7 @@ endBtn.addEventListener('click', () => {
   peerSubEl.textContent = 'You ended the call';
   countdownEl.textContent = '';
   avatarCircle.classList.remove('ringing');
+  document.getElementById('caller-profile-pic').classList.remove('ringing');
   muteBtn.classList.add('hidden');
   document.getElementById('caller-chat-toggle-btn').classList.add('hidden');
   chatCallBtn.classList.remove('hidden');
@@ -373,7 +396,11 @@ function showCallAgainBtn() {
       statusText.textContent = 'Ringing...';
       peerSubEl.textContent = `Calling ${linkInfo.ownerUsername}...`;
       countdownEl.textContent = '';
-      avatarCircle.classList.add('ringing');
+      if (linkInfo.profilePicture) {
+        document.getElementById('caller-profile-pic').classList.add('ringing');
+      } else {
+        avatarCircle.classList.add('ringing');
+      }
       muteBtn.classList.add('hidden');
       timerEl.classList.add('hidden');
       // Reconnect and call
@@ -449,7 +476,15 @@ chatCallBtn.addEventListener('click', async () => {
   peerSubEl.textContent = `Calling via "${linkInfo.name}"...`;
   avatarLetter.textContent = linkInfo.ownerUsername[0].toUpperCase();
   statusText.textContent = 'Ringing...';
-  avatarCircle.classList.add('ringing');
+  if (linkInfo.profilePicture) {
+    document.getElementById('caller-avatar-circle').classList.add('hidden');
+    const cPic = document.getElementById('caller-profile-pic');
+    cPic.src = linkInfo.profilePicture;
+    cPic.classList.remove('hidden');
+    cPic.classList.add('ringing');
+  } else {
+    avatarCircle.classList.add('ringing');
+  }
   muteBtn.classList.add('hidden');
   timerEl.classList.add('hidden');
 

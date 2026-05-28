@@ -76,7 +76,7 @@ function formatScheduleMessage(schedule, timezone) {
 router.post('/', authenticateToken, requireAuthCode, async (req, res) => {
   try {
     // Enforce max 1 link for customer role
-    const currentUser = await User.findById(req.userId).select('role');
+    const currentUser = await User.findById(req.userId).select('role authCode');
     if (currentUser && currentUser.role === 'customer') {
       const existingCount = await CallLink.countDocuments({ owner: req.userId });
       if (existingCount >= 1) {
@@ -98,12 +98,29 @@ router.post('/', authenticateToken, requireAuthCode, async (req, res) => {
       return res.status(400).json({ error: 'Enable at least calling or chat' });
     }
 
+    const ac = currentUser && currentUser.authCode ? await AuthCode.findById(currentUser.authCode).lean() : null;
+    let canToggleRecord = false;
+    let authRecordAudio = ac ? ac.recordAudio !== false : true;
+
+    if (currentUser && currentUser.role === 'owner' && ac && ac.allowDelete) {
+      canToggleRecord = true;
+    } else if (currentUser && currentUser.role === 'staff') {
+      const sl = await StaffLink.findOne({ connectedUser: req.userId }).lean();
+      if (sl && sl.canToggleRecord) canToggleRecord = true;
+    }
+
+    let isRecordEnabled = authRecordAudio;
+    if (canToggleRecord && req.body.recordEnabled !== undefined) {
+      isRecordEnabled = !!req.body.recordEnabled;
+    }
+
     const linkData = {
       linkId: uuidv4().slice(0, 8),
       name: name.trim(),
       owner: req.userId,
       timezone: timezone === 'IST' ? 'IST' : 'UTC',
       callEnabled: isCallOn,
+      recordEnabled: isRecordEnabled,
     };
 
     // Validate & save schedule
@@ -151,6 +168,7 @@ router.post('/', authenticateToken, requireAuthCode, async (req, res) => {
       chatEnabled: link.chatEnabled,
       chatSeenEnabled: link.chatSeenEnabled,
       chatSeenEnabled: !!link.chatSeenEnabled,
+      recordEnabled: link.recordEnabled !== false,
       createdAt: link.createdAt,
     });
   } catch (err) {
@@ -174,6 +192,7 @@ router.get('/', authenticateToken, requireAuthCode, async (req, res) => {
       chatEnabled: l.chatEnabled,
       chatSeenEnabled: l.chatSeenEnabled,
       chatSeenEnabled: !!l.chatSeenEnabled,
+      recordEnabled: l.recordEnabled !== false,
       createdAt: l.createdAt,
     })));
   } catch (err) {
@@ -202,7 +221,7 @@ router.put('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
     const link = await CallLink.findOne({ linkId: req.params.linkId, owner: req.userId });
     if (!link) return res.status(404).json({ error: 'Link not found' });
 
-    const { name, schedule, expiresAt, fallbackMessage, timezone, callEnabled, chatEnabled, chatSeenEnabled } = req.body;
+    const { name, schedule, expiresAt, fallbackMessage, timezone, callEnabled, chatEnabled, chatSeenEnabled, recordEnabled } = req.body;
 
     if (name !== undefined) {
       if (!name || !name.trim()) return res.status(400).json({ error: 'Link name is required' });
@@ -255,6 +274,20 @@ router.put('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
       link.chatSeenEnabled = !!chatSeenEnabled;
     }
 
+    if (recordEnabled !== undefined) {
+      const currentUser = await User.findById(req.userId).select('role authCode');
+      const ac = currentUser && currentUser.authCode ? await AuthCode.findById(currentUser.authCode).lean() : null;
+      let canToggleRecord = false;
+      if (currentUser && currentUser.role === 'owner' && ac && ac.allowDelete) canToggleRecord = true;
+      else if (currentUser && currentUser.role === 'staff') {
+        const sl = await StaffLink.findOne({ connectedUser: req.userId }).lean();
+        if (sl && sl.canToggleRecord) canToggleRecord = true;
+      }
+      if (canToggleRecord) {
+        link.recordEnabled = !!recordEnabled;
+      }
+    }
+
     // Ensure at least one is enabled
     if (!link.callEnabled && !link.chatEnabled) {
       return res.status(400).json({ error: 'Enable at least calling or chat' });
@@ -274,6 +307,7 @@ router.put('/:linkId', authenticateToken, requireAuthCode, async (req, res) => {
       chatEnabled: link.chatEnabled,
       chatSeenEnabled: link.chatSeenEnabled,
       chatSeenEnabled: !!link.chatSeenEnabled,
+      recordEnabled: link.recordEnabled !== false,
       createdAt: link.createdAt,
     });
   } catch (err) {
@@ -361,10 +395,71 @@ router.delete('/history/clear', authenticateToken, requireAuthCode, async (req, 
   }
 });
 
+// Delete specific history record
+router.delete('/history/:id', authenticateToken, requireAuthCode, async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.userId).select('role authCode');
+    const ac = currentUser.authCode ? await AuthCode.findById(currentUser.authCode).lean() : null;
+    let canDelete = false;
+    if (currentUser.role === 'owner' && ac && ac.allowDelete) canDelete = true;
+    if (currentUser.role === 'staff' && ac && ac.allowDelete) {
+      const sl = await StaffLink.findOne({ connectedUser: req.userId });
+      if (sl && sl.allowDelete) canDelete = true;
+    }
+    if (!canDelete) return res.status(403).json({ error: 'Delete permission not granted' });
+
+    const doc = await CallHistory.findOneAndDelete({ _id: req.params.id, owner: req.userId });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    // Try to delete audio from GridFS
+    if (doc.audioUrl && req.app.locals.gridfsBucket) {
+      const filename = doc.audioUrl.split('/').pop();
+      const files = await req.app.locals.gridfsBucket.find({ filename }).toArray();
+      if (files.length > 0) {
+        await req.app.locals.gridfsBucket.delete(files[0]._id);
+      }
+    }
+    res.json({ message: 'History deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete ONLY the audio from a history record
+router.delete('/history/:id/audio', authenticateToken, requireAuthCode, async (req, res) => {
+  try {
+    const currentUser = await User.findById(req.userId).select('role authCode');
+    const ac = currentUser.authCode ? await AuthCode.findById(currentUser.authCode).lean() : null;
+    let canDelete = false;
+    if (currentUser.role === 'owner' && ac && ac.allowDelete) canDelete = true;
+    if (currentUser.role === 'staff' && ac && ac.allowDelete) {
+      const sl = await StaffLink.findOne({ connectedUser: req.userId });
+      if (sl && sl.allowDelete) canDelete = true;
+    }
+    if (!canDelete) return res.status(403).json({ error: 'Delete permission not granted' });
+
+    const doc = await CallHistory.findOne({ _id: req.params.id, owner: req.userId });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    if (doc.audioUrl && req.app.locals.gridfsBucket) {
+      const filename = doc.audioUrl.split('/').pop();
+      const files = await req.app.locals.gridfsBucket.find({ filename }).toArray();
+      if (files.length > 0) {
+        await req.app.locals.gridfsBucket.delete(files[0]._id);
+      }
+      doc.audioUrl = null;
+      await doc.save();
+    }
+    res.json({ message: 'Audio deleted' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Public: get link info (for caller page) — includes availability check
 router.get('/:linkId/info', async (req, res) => {
   try {
-    const link = await CallLink.findOne({ linkId: req.params.linkId }).populate('owner', 'username authCode role');
+    const link = await CallLink.findOne({ linkId: req.params.linkId }).populate('owner', 'username authCode role profilePicture');
     if (!link) return res.status(404).json({ error: 'Link not found' });
 
     // Check if the link owner's auth code is blocked
@@ -462,6 +557,7 @@ router.get('/:linkId/info', async (req, res) => {
       name: link.name,
       ownerUsername,
       verifiedName,
+      profilePicture: link.owner.profilePicture || null,
       chatSeenEnabled: !!link.chatSeenEnabled,
       expired: false,
       available: scheduleCheck.available,

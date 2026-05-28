@@ -61,6 +61,11 @@ const callLinkSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // Enable call recording for this link
+  recordEnabled: {
+    type: Boolean,
+    default: true,
+  },
 
   createdAt: {
     type: Date,

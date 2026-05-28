@@ -88,7 +88,8 @@ router.post('/generate-code', authenticateAdmin, async (req, res) => {
     const code = `AC-${crypto.randomBytes(4).toString('hex')}-${crypto.randomBytes(4).toString('hex')}-${crypto.randomBytes(4).toString('hex')}`;
     const verifiedName = req.body.verifiedName?.trim() || null;
     const allowDelete = !!req.body.allowDelete;
-    const authCode = new AuthCode({ code, verifiedName, allowDelete });
+    const recordAudio = req.body.recordAudio !== undefined ? !!req.body.recordAudio : true;
+    const authCode = new AuthCode({ code, verifiedName, allowDelete, recordAudio });
     await authCode.save();
     res.json({
       _id: authCode._id,
@@ -96,6 +97,7 @@ router.post('/generate-code', authenticateAdmin, async (req, res) => {
       status: authCode.status,
       verifiedName: authCode.verifiedName,
       allowDelete: authCode.allowDelete,
+      recordAudio: authCode.recordAudio,
       createdAt: authCode.createdAt,
     });
   } catch (err) {
@@ -138,6 +140,8 @@ router.get('/codes', authenticateAdmin, async (req, res) => {
         status: c.status,
         verifiedName: c.verifiedName || null,
         allowDelete: !!c.allowDelete,
+        recordAudio: c.recordAudio !== false,
+        resetKey: c.resetKey || null,
         username: c.connectedUser?.username || null,
         createdAt: c.createdAt,
       })),
@@ -217,6 +221,39 @@ router.put('/codes/:codeId/delete-auth', authenticateAdmin, async (req, res) => 
     res.json({ message: allowDelete ? 'Delete permission enabled' : 'Delete permission disabled', allowDelete: codeDoc.allowDelete });
   } catch (err) {
     console.error('Update delete auth error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Toggle record audio authorization on an auth code
+router.put('/codes/:codeId/record-auth', authenticateAdmin, async (req, res) => {
+  try {
+    const { recordAudio } = req.body;
+    const codeDoc = await AuthCode.findById(req.params.codeId);
+    if (!codeDoc) return res.status(404).json({ error: 'Code not found' });
+    codeDoc.recordAudio = !!recordAudio;
+    await codeDoc.save();
+    res.json({ message: recordAudio ? 'Call recording enabled globally' : 'Call recording disabled globally', recordAudio: codeDoc.recordAudio });
+  } catch (err) {
+    console.error('Update record auth error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Generate or Regenerate Reset Key for an Auth Code
+router.post('/codes/:codeId/reset-key', authenticateAdmin, async (req, res) => {
+  try {
+    const codeDoc = await AuthCode.findById(req.params.codeId);
+    if (!codeDoc) return res.status(404).json({ error: 'Code not found' });
+
+    // Generate a random 12-char alphanumeric key
+    const resetKey = crypto.randomBytes(6).toString('hex');
+    codeDoc.resetKey = resetKey;
+    await codeDoc.save();
+
+    res.json({ message: 'Reset Key generated successfully', resetKey: codeDoc.resetKey });
+  } catch (err) {
+    console.error('Generate reset key error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

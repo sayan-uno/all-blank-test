@@ -16,6 +16,8 @@ const callHistorySchema = new mongoose.Schema({
     required: true,
   },
   time: { type: Date, default: Date.now },
+  // URL to the recorded audio file in GridFS
+  audioUrl: { type: String, default: null },
   // Duration in seconds (only for completed calls)
   duration: { type: Number, default: 0 },
   // Ring time in seconds (how long it rang before outcome)

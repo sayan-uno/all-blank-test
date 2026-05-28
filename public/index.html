@@ -61,8 +61,8 @@
           <input type="text" id="forgot-username" placeholder="Your username" required />
         </div>
         <div class="input-group">
-          <span class="input-icon">&#9993;</span>
-          <input type="email" id="forgot-email" placeholder="Recovery email" required />
+          <span class="input-icon">&#128273;</span>
+          <input type="text" id="forgot-reset-key" placeholder="Reset Key" required />
         </div>
         <div class="input-group">
           <span class="input-icon">&#128274;</span>
@@ -84,7 +84,10 @@
         <h1>CallDrop</h1>
       </div>
       <div class="nav-user">
-        <p>Welcome, <span id="dash-username" class="highlight"></span></p>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <img id="nav-profile-pic" class="nav-avatar hidden" src="" alt="" />
+          <p>Welcome, <span id="dash-username" class="highlight"></span></p>
+        </div>
         <div class="nav-actions">
           <button id="settings-btn" class="icon-btn" title="Settings">&#9881;</button>
           <button id="logout-btn" class="icon-btn" title="Sign Out" style="color: #e53170;">&#9211;</button>
@@ -102,13 +105,25 @@
     <div id="settings-panel" class="main-content hidden" style="padding-bottom:0;">
       <div class="content-block">
         <h3 class="section-title">&#9881; Account Settings</h3>
+        
+        <div class="profile-picture-section" style="display: flex; flex-direction: column; align-items: center; margin-bottom: 24px;">
+          <div class="avatar-upload-container" id="avatar-upload-container" title="Change Profile Picture">
+            <img id="settings-profile-pic" class="settings-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a1b2'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E" alt="Profile" />
+            <div class="avatar-overlay">
+              <span style="font-size: 1.2rem;">&#9998;</span>
+            </div>
+            <input type="file" id="profile-picture-input" accept="image/*" hidden />
+          </div>
+          <div id="profile-picture-msg" class="message hidden" style="margin-top: 10px; font-size: 0.8rem; padding: 6px 12px;"></div>
+        </div>
+
         <div class="info-row">
           <span class="info-label">Username</span>
           <span id="info-username" class="info-value"></span>
         </div>
-        <div id="email-row" class="info-row">
-          <span class="info-label">Recovery Email</span>
-          <span id="info-email" class="info-value">Not set</span>
+        <div id="contact-row" class="info-row" style="align-items: center; cursor: pointer;" onclick="window.location.href='mailto:garenaffmaxstore@gmail.com?subject=Support%20Request&body=Username:%20' + encodeURIComponent(document.getElementById('info-username').textContent) + '%0D%0AIssues:%20'">
+          <span class="info-label">Support</span>
+          <span class="info-value" style="color: #7ee787; text-decoration: underline;">Contact Admin</span>
         </div>
         <div class="info-row">
           <span class="info-label">Account Type</span>
@@ -118,14 +133,7 @@
           <span class="info-label">Member Since</span>
           <span id="info-date" class="info-value"></span>
         </div>
-        <!-- Email form (hidden for staff/customer) -->
-        <form id="email-form" class="form active" style="margin-top: 12px;">
-          <div class="input-group">
-            <span class="input-icon">&#9993;</span>
-            <input type="email" id="recovery-email" placeholder="your@email.com" required />
-          </div>
-          <button type="submit" class="btn btn-secondary btn-sm">Save Recovery Email</button>
-        </form>
+
 
         <!-- Trigger URL Section -->
         <div id="trigger-section" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
@@ -403,6 +411,14 @@
               </label>
             </div>
 
+            <!-- Call Record Toggle -->
+            <div class="schedule-toggle">
+              <label class="toggle-label">
+                <input type="checkbox" id="enable-record" checked />
+                <span>Enable call recording on this link</span>
+              </label>
+            </div>
+
             <!-- Chat Toggle -->
             <div class="schedule-toggle">
               <label class="toggle-label">
@@ -508,6 +524,12 @@
                 <label class="toggle-label">
                   <input type="checkbox" id="staff-allow-delete" />
                   <span>&#128274; Allow delete permission for this staff</span>
+                </label>
+              </div>
+              <div id="staff-record-toggle" class="schedule-toggle hidden">
+                <label class="toggle-label">
+                  <input type="checkbox" id="staff-can-toggle-record" />
+                  <span>&#127908; Allow toggling call recording</span>
                 </label>
               </div>
               <div class="form-actions">

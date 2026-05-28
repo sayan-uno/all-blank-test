@@ -6,6 +6,10 @@ const AuthCode = require('../models/AuthCode');
 const StaffLink = require('../models/StaffLink');
 const CustomerLink = require('../models/CustomerLink');
 const { authenticateToken, requireAuthCode } = require('../middleware/auth');
+const multer = require('multer');
+const path = require('path');
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }); // 5MB limit
 
 const router = express.Router();
 
@@ -189,32 +193,13 @@ router.get('/me', authenticateToken, requireAuthCode, async (req, res) => {
     }
     // Customers never get verified name or delete permission
 
-    res.json({ username: user.username, email: user.email, role: user.role, hasVerifiedName, canDelete, triggerUrl: user.triggerUrl || null, createdAt: user.createdAt });
+    res.json({ username: user.username, email: user.email, role: user.role, hasVerifiedName, canDelete, triggerUrl: user.triggerUrl || null, profilePicture: user.profilePicture || null, createdAt: user.createdAt });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Add / update recovery email
-router.put('/email', authenticateToken, requireAuthCode, async (req, res) => {
-  try {
-    // Staff and customer cannot change email
-    const user = await User.findById(req.userId).select('role');
-    if (user && (user.role === 'staff' || user.role === 'customer')) {
-      return res.status(403).json({ error: 'Email changes are not available for your account type' });
-    }
 
-    const { email } = req.body;
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: 'Valid email is required' });
-    }
-
-    await User.findByIdAndUpdate(req.userId, { email });
-    res.json({ message: 'Recovery email saved' });
-  } catch (err) {
-    res.status(500).json({ error: 'Server error' });
-  }
-});
 
 // Save / update / remove trigger URL (webhook)
 router.put('/trigger-url', authenticateToken, requireAuthCode, async (req, res) => {
@@ -242,21 +227,65 @@ router.put('/trigger-url', authenticateToken, requireAuthCode, async (req, res) 
   }
 });
 
-// Forgot password — reset via username + email
+// Upload profile picture
+router.post('/profile-picture', authenticateToken, requireAuthCode, upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const bucket = req.app.locals.gridfsBucket;
+    if (!bucket) {
+      return res.status(500).json({ error: 'GridFS not initialized' });
+    }
+
+    const ext = path.extname(req.file.originalname) || '.jpg';
+    const filename = `avatar-${req.userId}-${Date.now()}${ext}`;
+    
+    const uploadStream = bucket.openUploadStream(filename, {
+      contentType: req.file.mimetype
+    });
+
+    uploadStream.end(req.file.buffer);
+
+    uploadStream.on('finish', async () => {
+      try {
+        const user = await User.findById(req.userId);
+        user.profilePicture = `/api/files/${filename}`;
+        await user.save();
+        res.json({ profilePicture: user.profilePicture, message: 'Profile picture updated successfully' });
+      } catch (saveErr) {
+        console.error('Save profile picture URL error:', saveErr);
+        res.status(500).json({ error: 'Failed to update user profile' });
+      }
+    });
+
+    uploadStream.on('error', (err) => {
+      console.error('GridFS upload error:', err);
+      res.status(500).json({ error: 'Failed to upload image' });
+    });
+
+  } catch (err) {
+    console.error('Profile picture upload error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Forgot password — reset via username + reset key
 router.post('/forgot-password', async (req, res) => {
   try {
-    const { username, email, newPassword } = req.body;
+    const { username, resetKey, newPassword } = req.body;
 
-    if (!username || !email || !newPassword) {
+    if (!username || !resetKey || !newPassword) {
       return res.status(400).json({ error: 'All fields are required' });
     }
     if (newPassword.length < 6) {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    const user = await User.findOne({ username, email });
+    const user = await User.findOne({ username });
     if (!user) {
-      return res.status(404).json({ error: 'No account found with that username and email' });
+      return res.status(404).json({ error: 'No account found with that username' });
     }
 
     // Check auth code — blocked users can't reset password
@@ -264,6 +293,10 @@ router.post('/forgot-password', async (req, res) => {
       const codeDoc = await AuthCode.findById(user.authCode);
       if (!codeDoc || codeDoc.status === 'blocked') {
         return res.status(403).json({ error: 'Your access has been revoked' });
+      }
+
+      if (!codeDoc.resetKey || codeDoc.resetKey !== resetKey) {
+        return res.status(401).json({ error: 'Invalid Reset Key' });
       }
     } else {
       return res.status(403).json({ error: 'No auth code linked to this account' });

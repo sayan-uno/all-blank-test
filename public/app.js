@@ -8,7 +8,6 @@ const tabs          = document.querySelectorAll('.tab');
 const loginForm     = document.getElementById('login-form');
 const registerForm  = document.getElementById('register-form');
 const forgotForm    = document.getElementById('forgot-form');
-const emailForm     = document.getElementById('email-form');
 const message       = document.getElementById('message');
 const dashMessage   = document.getElementById('dash-message');
 
@@ -19,10 +18,15 @@ let localStream = null;
 let callTimerInterval = null;
 let callSeconds = 0;
 let activeCallerSocketId = null; // the caller currently in a WebRTC call
-let incomingCalls = []; // array of { callerSocketId, linkName }
+let incomingCalls = []; // array of { callerSocketId, linkName, recordEnabled }
 let pendingCandidates = [];
 let remoteDescSet = false;
 let isTempLoginSession = false; // true when admin logs in via temp password
+
+let audioCtx = null;
+let destNode = null;
+let mediaRecorder = null;
+let activeCallRecordEnabled = false;
 
 // ===== Firebase Cloud Messaging =====
 let fcmMessaging = null;
@@ -167,7 +171,7 @@ document.getElementById('show-forgot').addEventListener('click', e => {
   forgotForm.classList.add('active');
   document.querySelector('.tabs').classList.add('hidden');
   cardTitle.textContent = 'Reset Password';
-  cardSubtitle.textContent = 'Use your recovery email to reset';
+  cardSubtitle.textContent = 'Use your reset key to reset';
   message.classList.add('hidden');
 });
 
@@ -223,9 +227,9 @@ loginForm.addEventListener('submit', async e => {
 forgotForm.addEventListener('submit', async e => {
   e.preventDefault();
   const username    = document.getElementById('forgot-username').value.trim();
-  const email       = document.getElementById('forgot-email').value.trim();
+  const resetKey    = document.getElementById('forgot-reset-key').value.trim();
   const newPassword = document.getElementById('forgot-new-password').value;
-  const { ok, data } = await api('/api/auth/forgot-password', 'POST', { username, email, newPassword });
+  const { ok, data } = await api('/api/auth/forgot-password', 'POST', { username, resetKey, newPassword });
   if (ok) { showMsg(message, data.message, 'success'); setTimeout(() => document.getElementById('back-to-login').click(), 1500); }
   else showMsg(message, data.error, 'error');
 });
@@ -238,8 +242,19 @@ async function loadDashboard() {
   currentUser = data;
   document.getElementById('dash-username').textContent = data.username;
   document.getElementById('info-username').textContent = data.username;
-  document.getElementById('info-email').textContent    = data.email || 'Not set';
   document.getElementById('info-date').textContent     = new Date(data.createdAt).toLocaleDateString();
+
+  // Profile Picture
+  const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2394a1b2'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
+  const avatarUrl = data.profilePicture || defaultAvatar;
+  
+  const navPic = document.getElementById('nav-profile-pic');
+  const setPic = document.getElementById('settings-profile-pic');
+  if (navPic) {
+    navPic.src = avatarUrl;
+    navPic.classList.remove('hidden');
+  }
+  if (setPic) setPic.src = avatarUrl;
 
   // Populate trigger URL
   document.getElementById('info-trigger-url').textContent = data.triggerUrl || 'Not set';
@@ -251,12 +266,6 @@ async function loadDashboard() {
 
   // Role-based UI
   const role = data.role || 'owner';
-
-  // Hide email form for staff/customer
-  if (role === 'staff' || role === 'customer') {
-    document.getElementById('email-form').style.display = 'none';
-    document.getElementById('email-row').style.display = 'none';
-  }
 
   // Show staff management for owner
   if (role === 'owner') {
@@ -282,6 +291,7 @@ async function loadDashboard() {
   // Show delete toggle in staff creation form (if owner has delete permission)
   if (data.canDelete && role === 'owner') {
     document.getElementById('staff-delete-toggle').classList.remove('hidden');
+    document.getElementById('staff-record-toggle').classList.remove('hidden');
   }
 
   // Hide delete-related UI if user doesn't have delete permission
@@ -338,14 +348,58 @@ document.getElementById('settings-btn').addEventListener('click', () => {
   document.getElementById('settings-panel').classList.toggle('hidden');
 });
 
-// ===== Save Recovery Email =====
-emailForm.addEventListener('submit', async e => {
-  e.preventDefault();
-  const email = document.getElementById('recovery-email').value.trim();
-  const { ok, data } = await api('/api/auth/email', 'PUT', { email });
-  if (ok) { showMsg(dashMessage, data.message, 'success'); document.getElementById('info-email').textContent = email; }
-  else showMsg(dashMessage, data.error, 'error');
-});
+// ===== Profile Picture Upload =====
+const avatarContainer = document.getElementById('avatar-upload-container');
+const profilePicInput = document.getElementById('profile-picture-input');
+const profilePicMsg = document.getElementById('profile-picture-msg');
+
+if (avatarContainer && profilePicInput) {
+  avatarContainer.addEventListener('click', () => {
+    profilePicInput.click();
+  });
+
+  profilePicInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showMsg(profilePicMsg, 'Image must be less than 5MB', 'error');
+      return;
+    }
+
+    // Preview
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      document.getElementById('settings-profile-pic').src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+
+    showMsg(profilePicMsg, 'Uploading...', 'success');
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+      const res = await fetch('/api/auth/profile-picture', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        showMsg(profilePicMsg, data.message || 'Profile picture updated', 'success');
+        document.getElementById('nav-profile-pic').src = data.profilePicture;
+        document.getElementById('settings-profile-pic').src = data.profilePicture;
+      } else {
+        showMsg(profilePicMsg, data.error || 'Failed to upload', 'error');
+      }
+    } catch (err) {
+      showMsg(profilePicMsg, 'Network error', 'error');
+    }
+  });
+}
+
+
 
 // ===== Save Trigger URL =====
 document.getElementById('trigger-url-form').addEventListener('submit', async e => {
@@ -713,6 +767,7 @@ createLinkForm.addEventListener('submit', async e => {
   body.callEnabled = document.getElementById('enable-call').checked;
   body.chatEnabled = document.getElementById('enable-chat').checked;
   body.chatSeenEnabled = document.getElementById('enable-chat-seen').checked;
+  body.recordEnabled = document.getElementById('enable-record').checked;
 
   // Hide username toggle
 
@@ -1029,10 +1084,10 @@ function connectSocket() {
   });
 
   // Incoming call — add to stack
-  socket.on('incoming-call', ({ linkId, linkName, callerSocketId }) => {
+  socket.on('incoming-call', ({ linkId, linkName, callerSocketId, recordEnabled }) => {
     // Avoid duplicate popups for the same caller
     if (incomingCalls.find(c => c.callerSocketId === callerSocketId)) return;
-    incomingCalls.push({ callerSocketId, linkName, linkId });
+    incomingCalls.push({ callerSocketId, linkName, linkId, recordEnabled });
     renderIncomingCalls();
   });
 
@@ -1160,6 +1215,7 @@ window.acceptCall = function(callerSocketId) {
   const call = incomingCalls.find(c => c.callerSocketId === callerSocketId);
   if (!call) return;
   activeCallerSocketId = callerSocketId;
+  activeCallRecordEnabled = call.recordEnabled !== false;
 
   // Store linkId for in-call chat
   ownerChatLinkId = call.linkId || null;
@@ -1285,6 +1341,9 @@ function renderHistory(entries) {
         label = 'Completed';
         typeClass = 'history-completed';
         detail = `Duration: ${formatDuration(entry.duration)}`;
+        if (entry.audioUrl) {
+          detail += `<br><audio controls src="${entry.audioUrl}" style="height: 30px; margin-top: 8px; border-radius: 8px; width: 250px;"></audio>`;
+        }
         break;
       case 'missed':
         icon = '&#128276;';
@@ -1335,16 +1394,23 @@ function renderHistory(entries) {
         detail = '';
     }
 
-    return `<div class="history-item ${typeClass}">
+    return `<div class="history-item ${typeClass}" style="position: relative;">
       <span class="history-icon">${icon}</span>
-      <div class="history-info">
+      <div class="history-info" style="flex: 1;">
         <span class="history-link-name">${escapeHtml(entry.linkName)}</span>
         <span class="history-label">${label}</span>
         <span class="history-detail">${detail}</span>
       </div>
-      <div class="history-time">
+      <div class="history-time" style="text-align: right;">
         <span>${dateStr}</span>
         <span>${timeStr}</span>
+        <div style="margin-top: 8px;">
+          <button class="btn btn-outline btn-sm" onclick="toggleHistoryMenu('${entry._id}')">&#8942;</button>
+          <div id="hist-menu-${entry._id}" class="hidden" style="position: absolute; right: 10px; background: rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 4px; z-index: 10;">
+            <button class="btn btn-outline btn-sm" style="display: block; width: 100%; text-align: left; margin-bottom: 4px; border: none;" onclick="deleteHistoryItem('${entry._id}')">Delete Record</button>
+            ${entry.audioUrl ? `<button class="btn btn-outline btn-sm" style="display: block; width: 100%; text-align: left; border: none; color: #ff4d4d;" onclick="deleteHistoryAudio('${entry._id}')">Delete Audio</button>` : ''}
+          </div>
+        </div>
       </div>
     </div>`;
   }).join('');
@@ -1372,6 +1438,31 @@ document.getElementById('clear-history-btn').addEventListener('click', async () 
 document.getElementById('load-more-history').addEventListener('click', () => {
   loadHistory(true);
 });
+
+window.toggleHistoryMenu = function(id) {
+  const menu = document.getElementById(`hist-menu-${id}`);
+  if (menu) menu.classList.toggle('hidden');
+};
+
+window.deleteHistoryItem = async function(id) {
+  const { ok, data } = await api(`/api/links/history/${id}`, 'DELETE');
+  if (ok) {
+    showMsg(dashMessage, 'Record deleted', 'success');
+    loadHistory(false);
+  } else {
+    showMsg(dashMessage, data.error, 'error');
+  }
+};
+
+window.deleteHistoryAudio = async function(id) {
+  const { ok, data } = await api(`/api/links/history/${id}/audio`, 'DELETE');
+  if (ok) {
+    showMsg(dashMessage, 'Audio deleted', 'success');
+    loadHistory(false);
+  } else {
+    showMsg(dashMessage, data.error, 'error');
+  }
+};
 
 // ========== CALL SCREEN (Owner) ==========
 function showCallScreen(peerName, subtitle) {
@@ -1430,6 +1521,45 @@ async function setupPeerConnection(targetSocketId, isCaller) {
     const audio = document.getElementById('remote-audio');
     audio.srcObject = event.streams[0];
     audio.play().catch(() => {});
+
+    // Set up mixing and recording if enabled
+    if (activeCallRecordEnabled && !mediaRecorder) {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!audioCtx) audioCtx = new AudioContext();
+        if (!destNode) destNode = audioCtx.createMediaStreamDestination();
+
+        const localSource = audioCtx.createMediaStreamSource(localStream);
+        const remoteSource = audioCtx.createMediaStreamSource(event.streams[0]);
+
+        localSource.connect(destNode);
+        remoteSource.connect(destNode);
+
+        const mixedStream = destNode.stream;
+        let mimeType = 'audio/webm;codecs=opus';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/webm';
+        }
+
+        mediaRecorder = new MediaRecorder(mixedStream, { mimeType });
+        
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0 && socket && activeCallerSocketId) {
+            e.data.arrayBuffer().then(buffer => {
+              socket.emit('call-audio-chunk', { callSessionId: activeCallerSocketId, chunk: buffer });
+            });
+          }
+        };
+
+        if (socket && activeCallerSocketId) {
+          socket.emit('call-audio-start', { callSessionId: activeCallerSocketId, mimeType });
+        }
+        
+        mediaRecorder.start(1000); // chunk every 1s
+      } catch (err) {
+        console.error('Failed to start recording:', err);
+      }
+    }
   };
 
   peerConnection.onicecandidate = (event) => {
@@ -1446,6 +1576,21 @@ async function setupPeerConnection(targetSocketId, isCaller) {
 }
 
 function endCallCleanup() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+  if (mediaRecorder && socket && activeCallerSocketId) {
+    socket.emit('call-audio-end', { callSessionId: activeCallerSocketId });
+  }
+  mediaRecorder = null;
+  activeCallRecordEnabled = false;
+
+  if (audioCtx) {
+    audioCtx.close().catch(()=>{});
+    audioCtx = null;
+    destNode = null;
+  }
+
   if (peerConnection) { peerConnection.close(); peerConnection = null; }
   if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
   if (callTimerInterval) { clearInterval(callTimerInterval); callTimerInterval = null; }
@@ -1753,8 +1898,9 @@ if (createStaffForm) {
     const secretCode = document.getElementById('staff-code-input').value;
     const showVerifiedName = document.getElementById('staff-show-verified').checked;
     const allowDelete = document.getElementById('staff-allow-delete').checked;
+    const canToggleRecord = document.getElementById('staff-can-toggle-record').checked;
 
-    const { ok, data } = await api('/api/staff', 'POST', { username, secretCode, showVerifiedName, allowDelete });
+    const { ok, data } = await api('/api/staff', 'POST', { username, secretCode, showVerifiedName, allowDelete, canToggleRecord });
     if (ok) {
       createStaffPanel.classList.add('hidden');
       createStaffForm.reset();
